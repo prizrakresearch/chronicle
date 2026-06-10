@@ -1,26 +1,95 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Dark green palette — Chronicle design system */
+:root {
+  --background: oklch(0.085 0.022 148);
+  --foreground: oklch(0.97 0.012 148);
+  --card: oklch(0.125 0.018 148);
+  --card-foreground: oklch(0.97 0.012 148);
+  --popover: oklch(0.11 0.018 148);
+  --popover-foreground: oklch(0.97 0.012 148);
+  --primary: oklch(0.855 0.255 124);
+  --primary-foreground: oklch(0.085 0.022 148);
+  --secondary: oklch(0.18 0.025 148);
+  --secondary-foreground: oklch(0.97 0.012 148);
+  --muted: oklch(0.18 0.025 148);
+  --muted-foreground: oklch(0.58 0.045 148);
+  --accent: oklch(0.18 0.025 148);
+  --accent-foreground: oklch(0.97 0.012 148);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(0.26 0.035 148 / 65%);
+  --input: oklch(0.18 0.025 148);
+  --ring: oklch(0.765 0.21 148 / 50%);
+  --radius: 0.75rem;
+}
+
+@keyframes circlesFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@layer utilities {
+  .bg-bokeh {
+    background-color: #040804;
+    background-image:
+      radial-gradient(ellipse 1400px 1100px at 10% 15%, rgba(163, 230, 53, 0.18) 0%, rgba(120, 180, 30, 0.09) 45%, transparent 70%);
+    background-size: cover;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.28 0.035 148);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.38 0.05 148);
+  }
 }
