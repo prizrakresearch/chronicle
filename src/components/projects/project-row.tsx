@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { MoreHorizontal, GitBranch, Clock, Trash2, Archive, RotateCcw, ExternalLink } from "lucide-react";
+import { MoreHorizontal, GitBranch, Clock, Trash2, Archive, RotateCcw, CircleDot, Rocket, Globe, Terminal, Database, Layers, Cpu, Compass, Flame, Code2, Boxes, Radio, Wand2, Satellite, FlaskConical, Binary } from "lucide-react";
 import { ProjectStatusBadge } from "./project-status-badge";
 import {
   DropdownMenu,
@@ -14,7 +14,14 @@ import { formatRelativeDate } from "@/lib/utils/format";
 import { useProjects } from "@/lib/store/projects-context";
 import type { Project } from "@/types";
 import { cn } from "@/lib/utils";
-import { getAvatarColor, getInitials } from "./project-card";
+import { getAvatarColor } from "./project-card";
+
+const PLACEHOLDER_ICONS = [Rocket, Globe, Terminal, Database, Layers, Cpu, Compass, Flame, Code2, Boxes, Radio, Wand2, Satellite, FlaskConical, Binary];
+
+function getProjectIcon(name: string) {
+  const idx = name.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % PLACEHOLDER_ICONS.length;
+  return PLACEHOLDER_ICONS[idx];
+}
 
 interface ProjectRowProps {
   project: Project;
@@ -22,11 +29,12 @@ interface ProjectRowProps {
 
 function ProjectAvatar({ name, logoUrl }: { name: string; logoUrl: string | null }) {
   if (logoUrl) {
-    return <img src={logoUrl} alt={name} className="w-8 h-8 rounded-full object-cover shrink-0" />;
+    return <img src={logoUrl} alt={name} className="w-14 h-14 rounded-full object-cover shrink-0" />;
   }
+  const Icon = getProjectIcon(name);
   return (
-    <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 select-none", getAvatarColor(name))}>
-      {getInitials(name)}
+    <div className={cn("w-14 h-14 rounded-full flex items-center justify-center shrink-0 select-none", getAvatarColor(name))}>
+      <Icon className="h-5 w-5" />
     </div>
   );
 }
@@ -36,7 +44,7 @@ export function ProjectRow({ project }: ProjectRowProps) {
   const repoShortName = project.githubRepo?.fullName.split("/")[1] ?? null;
 
   return (
-    <div className="group flex items-center gap-4 px-5 py-5 hover:bg-white/[0.025] transition-colors duration-200 ease-out">
+    <div className="group flex items-center gap-4 pl-1 pr-4 py-1 rounded-full border border-border/50 bg-gradient-to-r from-black/55 to-black/45 backdrop-blur-sm hover:bg-white/[0.04] hover:border-border/80 transition-colors duration-200 ease-out">
       <ProjectAvatar name={project.name} logoUrl={project.logoUrl} />
 
       {/* Name + description */}
@@ -55,24 +63,20 @@ export function ProjectRow({ project }: ProjectRowProps) {
       </div>
 
       {/* Meta row */}
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex items-center gap-3 text-[11px] shrink-0">
         <ProjectStatusBadge status={project.status} size="sm" />
-        <div className="flex items-center gap-4 text-[11px] text-white/30">
-          {repoShortName && (
-            <span className="flex items-center gap-1.5">
-              <GitBranch className="h-3 w-3" />
-              {repoShortName}
-            </span>
-          )}
-          <span className="flex items-center gap-1.5">
-            <ExternalLink className="h-3 w-3" />
-            {project._count.timelineEvents} events
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Clock className="h-3 w-3" />
-            {formatRelativeDate(project.updatedAt)}
-          </span>
-        </div>
+        <span className="flex items-center gap-1.5 text-white/30">
+          <GitBranch className="h-3 w-3" />
+          {project.githubRepo?.defaultBranch ?? "no branch"}
+        </span>
+        <span className="flex items-center gap-1.5 text-white/30">
+          <Clock className="h-3 w-3" />
+          {formatRelativeDate(project.updatedAt)}
+        </span>
+        <span className="flex items-center gap-1.5 text-white/30">
+          <CircleDot className="h-3 w-3" />
+          {project._count.roadmapItems} open
+        </span>
       </div>
 
       {/* Context menu */}
