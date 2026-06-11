@@ -55,6 +55,11 @@ export default function RootLayout({
             mouseRadius={0.5}
             enableMouseInteraction={true}
           />
+          {/* 40% black overlay over the dither canvas */}
+          <div
+            className="fixed inset-0 bg-black pointer-events-none"
+            style={{ opacity: 0.4, zIndex: -5 }}
+          />
           <TooltipProvider>
             <ProjectsProvider>
               <CommandPalette />

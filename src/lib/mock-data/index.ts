@@ -8,8 +8,8 @@ function d(offsetDays: number): Date {
 
 export const MOCK_PROJECTS: Project[] = [
   {
-    id: "proj_chronicle",
-    name: "Chronicle",
+    id: "proj_chronicle1",
+    name: "Chronicle1",
     description:
       "Personal project operating system — the memory layer for all my projects. Built with Next.js, Tailwind, and Neon PostgreSQL.",
     status: "active",
@@ -17,9 +17,9 @@ export const MOCK_PROJECTS: Project[] = [
     createdAt: d(45),
     updatedAt: d(0),
     githubRepo: {
-      id: "repo_chronicle",
+      id: "repo_chronicle1",
       githubId: 1001,
-      fullName: "adyothuria/chronicle",
+      fullName: "adyothuria/chronicle1",
       defaultBranch: "main",
       description: "Personal project OS",
       stars: 12,
@@ -98,28 +98,28 @@ export const MOCK_PROJECTS: Project[] = [
     _count: { timelineEvents: 4, roadmapItems: 6 },
   },
   {
-    id: "proj_spectral",
-    name: "Spectral UI",
+    id: "proj_chronicle",
+    name: "Chronicle",
     description: "Component library built on Radix primitives with a brutalist dark aesthetic. Tailwind-first.",
     status: "paused",
-    logoUrl: null,
+    logoUrl: "https://play-lh.googleusercontent.com/RR-5XK7UlZ4L9BWN5O13QtYjYh4iMN7WatK3rfqBg0WRiyHPlJyf_Z8dl92kvPArTnvdNfMD7OkYgdbkeL9Q-lg",
     createdAt: d(180),
     updatedAt: d(30),
     githubRepo: null,
     _count: { timelineEvents: 3, roadmapItems: 9 },
   },
   {
-    id: "proj_driftlog",
-    name: "Driftlog",
+    id: "proj_hermes",
+    name: "Hermes",
     description: "Structured daily logging CLI. Markdown journals indexed by date with full-text search.",
     status: "active",
-    logoUrl: null,
+    logoUrl: "https://thumbs.dreamstime.com/b/hermes-paris-vector-illustration-hermes-paris-vector-illustration-editorial-loog-clothing-brand-136940586.jpg",
     createdAt: d(22),
     updatedAt: d(1),
     githubRepo: {
-      id: "repo_driftlog",
+      id: "repo_hermes",
       githubId: 1005,
-      fullName: "adyothuria/driftlog",
+      fullName: "adyothuria/hermes",
       defaultBranch: "main",
       description: "CLI daily journal",
       stars: 7,
@@ -129,10 +129,10 @@ export const MOCK_PROJECTS: Project[] = [
   },
   {
     id: "proj_prism",
-    name: "Prism Analytics",
+    name: "Project Prism",
     description: "Lightweight self-hosted analytics. No cookies, no GDPR headaches. Tracks page views and custom events.",
     status: "paused",
-    logoUrl: null,
+    logoUrl: "https://play-lh.googleusercontent.com/814oVEPEUuRRv-Q1UOS9WEiZSIALx_Uy7AT-GdISPPNVvM0mbRxUMTtAzXwiRxjzFEjcxd57ssrLKmoyTuoEAw",
     createdAt: d(200),
     updatedAt: d(45),
     githubRepo: {
