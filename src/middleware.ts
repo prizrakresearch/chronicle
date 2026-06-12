@@ -16,21 +16,21 @@ export default clerkMiddleware(async (auth, req) => {
   // Not signed in → send to sign-in page
   if (!userId) return redirectToSignIn();
 
-  // Signed in but has no role → self-signup that shouldn't exist
-  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+  // Read role from the custom session claim "metadata" (set via Clerk dashboard
+  // session token customization: { "metadata": "{{user.public_metadata}}" })
+  const meta = (sessionClaims?.metadata ?? {}) as {
     role?: string;
     expiresAt?: string;
   };
 
+  // Signed in but has no role → self-signup without an invite
   if (!meta.role) {
     return NextResponse.redirect(new URL("/unauthorized", req.url));
   }
 
   // Guest whose access window has closed
   if (meta.expiresAt && new Date(meta.expiresAt) < new Date()) {
-    return NextResponse.redirect(
-      new URL("/sign-in?expired=true", req.url)
-    );
+    return NextResponse.redirect(new URL("/sign-in?expired=true", req.url));
   }
 
   return NextResponse.next();
