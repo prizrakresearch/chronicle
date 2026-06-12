@@ -158,10 +158,11 @@ type ItemType = { kind: "link"; link: ProjectLink } | { kind: "file"; file: Proj
 
 // ── List row ──────────────────────────────────────────────────────────────────
 
-function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onDeleteFile }: {
+function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onDeleteFile, isReadOnly }: {
   item: ItemType; meta: ItemMeta; folders: { id: string; name: string }[];
   allTags: string[]; onMetaChange: (m: Partial<ItemMeta>) => void;
   onDeleteLink: (id: string) => void; onDeleteFile: (id: string) => void;
+  isReadOnly: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const id        = item.kind === "link" ? item.link.id : item.file.id;
@@ -204,17 +205,19 @@ function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onD
               </button>
             </>
           )}
-          {folders.length > 0 && (
+          {!isReadOnly && folders.length > 0 && (
             <div className="ml-0.5">
               <FolderAssign folders={folders} currentFolderId={meta.folderId} onAssign={fid => onMetaChange({ folderId: fid })} />
             </div>
           )}
-          <button onClick={() => item.kind === "link" ? onDeleteLink(id) : onDeleteFile(id)}
-            className="h-7 w-7 rounded-full border border-red-500/10 text-red-400/30 hover:text-red-400/80 hover:border-red-500/30 hover:bg-red-500/5 flex items-center justify-center transition duration-150 ml-0.5">
-            <Trash2 className="h-3 w-3" />
-          </button>
+          {!isReadOnly && (
+            <button onClick={() => item.kind === "link" ? onDeleteLink(id) : onDeleteFile(id)}
+              className="h-7 w-7 rounded-full border border-red-500/10 text-red-400/30 hover:text-red-400/80 hover:border-red-500/30 hover:bg-red-500/5 flex items-center justify-center transition duration-150 ml-0.5">
+              <Trash2 className="h-3 w-3" />
+            </button>
+          )}
         </div>
-        <TagAdder existingTags={meta.tags} allTags={allTags} onAdd={t => onMetaChange({ tags: [...meta.tags, t] })} />
+        {!isReadOnly && <TagAdder existingTags={meta.tags} allTags={allTags} onAdd={t => onMetaChange({ tags: [...meta.tags, t] })} />}
       </div>
       {meta.tags.length > 0 && (
         <div className="flex flex-wrap gap-1 pl-11">
@@ -229,9 +232,10 @@ function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onD
 
 // ── Grid card ─────────────────────────────────────────────────────────────────
 
-function ItemCard({ item, meta, onDeleteLink, onDeleteFile }: {
+function ItemCard({ item, meta, onDeleteLink, onDeleteFile, isReadOnly }: {
   item: ItemType; meta: ItemMeta;
   onDeleteLink: (id: string) => void; onDeleteFile: (id: string) => void;
+  isReadOnly: boolean;
 }) {
   const id       = item.kind === "link" ? item.link.id : item.file.id;
   const Icon     = item.kind === "link" ? LINK_ICONS[item.link.type] : fileIcon(item.file.mimeType);
@@ -267,10 +271,12 @@ function ItemCard({ item, meta, onDeleteLink, onDeleteFile }: {
             <ExternalLink className="h-2.5 w-2.5" />
           </button>
         )}
-        <button onClick={() => item.kind === "link" ? onDeleteLink(id) : onDeleteFile(id)}
-          className="h-6 w-6 rounded-full border border-red-500/10 text-red-400/30 hover:text-red-400/80 hover:border-red-500/30 hover:bg-red-500/5 flex items-center justify-center transition duration-150">
-          <Trash2 className="h-2.5 w-2.5" />
-        </button>
+        {!isReadOnly && (
+          <button onClick={() => item.kind === "link" ? onDeleteLink(id) : onDeleteFile(id)}
+            className="h-6 w-6 rounded-full border border-red-500/10 text-red-400/30 hover:text-red-400/80 hover:border-red-500/30 hover:bg-red-500/5 flex items-center justify-center transition duration-150">
+            <Trash2 className="h-2.5 w-2.5" />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -311,7 +317,7 @@ interface FilesPanelProps {
 }
 
 function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaChange, showCredentials, onToggleCredentials }: FilesPanelProps) {
-  const { getLinks, getProjectFiles, addProjectFile, deleteLink, deleteProjectFile } = useProjects();
+  const { getLinks, getProjectFiles, addProjectFile, deleteLink, deleteProjectFile, isReadOnly } = useProjects();
   const [addLinkOpen,      setAddLinkOpen]  = useState(false);
   const [dragOver,         setDragOver]     = useState(false);
   const [uploading,        setUploading]    = useState(false);
@@ -381,36 +387,42 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
   const content = (
     <div
       className="h-full flex flex-col"
-      onDragEnter={handleDragEnter} onDragLeave={handleDragLeave}
-      onDragOver={handleDragOver} onDrop={handleDrop}
+      onDragEnter={!isReadOnly ? handleDragEnter : undefined}
+      onDragLeave={!isReadOnly ? handleDragLeave : undefined}
+      onDragOver={!isReadOnly ? handleDragOver : undefined}
+      onDrop={!isReadOnly ? handleDrop : undefined}
     >
       {/* Toolbar */}
       <div className="flex items-center gap-2 mb-3 pt-1 shrink-0 flex-wrap">
-        <button onClick={() => setAddLinkOpen(true)}
-          className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 flex items-center gap-1.5 transition duration-200">
-          <Link2 className="h-3.5 w-3.5" />Add link
-        </button>
-        <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-          className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 flex items-center gap-1.5 transition duration-200 disabled:opacity-40">
-          <Upload className="h-3.5 w-3.5" />{uploading ? "Uploading…" : "Upload file"}
-        </button>
-        <button onClick={onCreateFolder}
-          className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 flex items-center gap-1.5 transition duration-200">
-          <FolderPlus className="h-3.5 w-3.5" />New folder
-        </button>
-        <button
-          onClick={onToggleCredentials}
-          className={cn(
-            "h-9 px-4 text-xs font-semibold rounded-full border flex items-center gap-1.5 transition duration-200 hover:-translate-y-px active:translate-y-0",
-            showCredentials
-              ? "border-primary/40 text-primary/75 bg-primary/10"
-              : "border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10"
-          )}
-        >
-          <KeyRound className="h-3.5 w-3.5" />Credentials
-        </button>
-        <input ref={fileInputRef} type="file" multiple className="hidden"
-          onChange={e => { if (e.target.files) ingestFiles(e.target.files); e.target.value = ""; }} />
+        {!isReadOnly && (
+          <>
+            <button onClick={() => setAddLinkOpen(true)}
+              className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 flex items-center gap-1.5 transition duration-200">
+              <Link2 className="h-3.5 w-3.5" />Add link
+            </button>
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+              className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 flex items-center gap-1.5 transition duration-200 disabled:opacity-40">
+              <Upload className="h-3.5 w-3.5" />{uploading ? "Uploading…" : "Upload file"}
+            </button>
+            <button onClick={onCreateFolder}
+              className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 flex items-center gap-1.5 transition duration-200">
+              <FolderPlus className="h-3.5 w-3.5" />New folder
+            </button>
+            <button
+              onClick={onToggleCredentials}
+              className={cn(
+                "h-9 px-4 text-xs font-semibold rounded-full border flex items-center gap-1.5 transition duration-200 hover:-translate-y-px active:translate-y-0",
+                showCredentials
+                  ? "border-primary/40 text-primary/75 bg-primary/10"
+                  : "border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10"
+              )}
+            >
+              <KeyRound className="h-3.5 w-3.5" />Credentials
+            </button>
+            <input ref={fileInputRef} type="file" multiple className="hidden"
+              onChange={e => { if (e.target.files) ingestFiles(e.target.files); e.target.value = ""; }} />
+          </>
+        )}
 
         {/* View + fullscreen controls */}
         <div className="ml-auto flex items-center gap-1">
@@ -482,16 +494,18 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
             <p className="text-sm font-medium text-white/40">Nothing here yet</p>
             <p className="text-xs text-white/20 mt-1">Add links, upload files, or drag files onto this page</p>
           </div>
-          <div className="flex gap-2 mt-1">
-            <button onClick={() => setAddLinkOpen(true)}
-              className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/35 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 flex items-center gap-1.5 transition duration-200">
-              <Link2 className="h-3 w-3" />Add link
-            </button>
-            <button onClick={() => fileInputRef.current?.click()}
-              className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/35 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 flex items-center gap-1.5 transition duration-200">
-              <Upload className="h-3 w-3" />Upload file
-            </button>
-          </div>
+          {!isReadOnly && (
+            <div className="flex gap-2 mt-1">
+              <button onClick={() => setAddLinkOpen(true)}
+                className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/35 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 flex items-center gap-1.5 transition duration-200">
+                <Link2 className="h-3 w-3" />Add link
+              </button>
+              <button onClick={() => fileInputRef.current?.click()}
+                className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/35 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 flex items-center gap-1.5 transition duration-200">
+                <Upload className="h-3 w-3" />Upload file
+              </button>
+            </div>
+          )}
         </div>
       ) : viewMode === "grid" ? (
         /* ── Grid view ── */
@@ -501,7 +515,7 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
               const id = item.kind === "link" ? item.link.id : item.file.id;
               return (
                 <ItemCard key={id} item={item} meta={getMeta(id)}
-                  onDeleteLink={deleteLink} onDeleteFile={deleteProjectFile} />
+                  onDeleteLink={deleteLink} onDeleteFile={deleteProjectFile} isReadOnly={isReadOnly} />
               );
             })}
           </div>
@@ -530,7 +544,7 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
                       return (
                         <ItemRow key={id} item={item} meta={getMeta(id)} folders={folders} allTags={allTags}
                           onMetaChange={m => onMetaChange(id, m)}
-                          onDeleteLink={deleteLink} onDeleteFile={deleteProjectFile} />
+                          onDeleteLink={deleteLink} onDeleteFile={deleteProjectFile} isReadOnly={isReadOnly} />
                       );
                     })}
                   </div>
@@ -549,7 +563,7 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
                   return (
                     <ItemRow key={id} item={item} meta={getMeta(id)} folders={folders} allTags={allTags}
                       onMetaChange={m => onMetaChange(id, m)}
-                      onDeleteLink={deleteLink} onDeleteFile={deleteProjectFile} />
+                      onDeleteLink={deleteLink} onDeleteFile={deleteProjectFile} isReadOnly={isReadOnly} />
                   );
                 })}
               </div>

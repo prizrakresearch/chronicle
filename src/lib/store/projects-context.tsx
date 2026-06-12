@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback } from "react";
+import { useUser } from "@clerk/nextjs";
 import type { Project, TimelineEvent, RoadmapItem, ProjectLink, ProjectFile, ProjectStatus, RoadmapStatus } from "@/types";
 import {
   MOCK_PROJECTS,
@@ -44,11 +45,19 @@ interface ProjectsContextValue {
   pin: string | null;
   setPin: (pin: string) => void;
   clearPin: () => void;
+
+  isReadOnly: boolean;
 }
 
 const ProjectsContext = createContext<ProjectsContextValue | null>(null);
 
 export function ProjectsProvider({ children }: { children: React.ReactNode }) {
+  // Derive read-only flag from Clerk user role.
+  // Only accounts explicitly marked role:"owner" get write access.
+  const { user } = useUser();
+  const role = (user?.publicMetadata as { role?: string } | undefined)?.role;
+  const isReadOnly = role !== "owner";
+
   const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>(MOCK_TIMELINE_EVENTS);
   const [roadmapItems, setRoadmapItems] = useState<RoadmapItem[]>(MOCK_ROADMAP_ITEMS);
@@ -235,6 +244,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         pin,
         setPin,
         clearPin,
+        isReadOnly,
       }}
     >
       {children}

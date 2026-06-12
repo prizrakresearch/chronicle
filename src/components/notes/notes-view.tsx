@@ -210,7 +210,7 @@ interface NotesViewProps {
 }
 
 export function NotesView({ project }: NotesViewProps) {
-  const { updateProject } = useProjects();
+  const { updateProject, isReadOnly } = useProjects();
   const notes = project.markdownNotes;
 
   // What's open in the editor
@@ -419,32 +419,34 @@ export function NotesView({ project }: NotesViewProps) {
       {/* ── Left: sidebar ── */}
       <div className="w-[260px] shrink-0 flex flex-col gap-2 pt-px">
 
-        {/* New / Import */}
-        <div className="flex gap-2">
-          <button
-            onClick={createNote}
-            className="flex-1 h-11 px-4 text-sm font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 flex items-center justify-center gap-2 transition duration-200 ease-in-out"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New
-          </button>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importing}
-            className="flex-1 h-11 px-4 text-sm font-semibold rounded-full bg-transparent text-white/40 border border-white/10 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 flex items-center justify-center gap-2 transition duration-200 ease-in-out disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Upload className="h-3.5 w-3.5" />
-            {importing ? "Importing…" : "Import"}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept=".txt,.md,.markdown,.text,.rtf,.html,.htm,.docx,.doc,.pages,.odt,.csv,.log,.yaml,.yml,.json"
-            className="hidden"
-            onChange={handleImport}
-          />
-        </div>
+        {/* New / Import — hidden for guests */}
+        {!isReadOnly && (
+          <div className="flex gap-2">
+            <button
+              onClick={createNote}
+              className="flex-1 h-11 px-4 text-sm font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 flex items-center justify-center gap-2 transition duration-200 ease-in-out"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="flex-1 h-11 px-4 text-sm font-semibold rounded-full bg-transparent text-white/40 border border-white/10 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 flex items-center justify-center gap-2 transition duration-200 ease-in-out disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              {importing ? "Importing…" : "Import"}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".txt,.md,.markdown,.text,.rtf,.html,.htm,.docx,.doc,.pages,.odt,.csv,.log,.yaml,.yml,.json"
+              className="hidden"
+              onChange={handleImport}
+            />
+          </div>
+        )}
 
         {/* ── Bulk action strip (slides in when selection is active) ── */}
         <div className={cn(
@@ -462,13 +464,15 @@ export function NotesView({ project }: NotesViewProps) {
               <Download className="h-2.5 w-2.5" />
               Export
             </button>
-            <button
-              onClick={bulkDelete}
-              className="h-7 px-2.5 text-[10px] font-semibold rounded-full border border-red-500/30 text-red-400/70 hover:bg-red-500/8 hover:border-red-500/50 flex items-center gap-1 transition duration-150"
-            >
-              <Trash2 className="h-2.5 w-2.5" />
-              Delete
-            </button>
+            {!isReadOnly && (
+              <button
+                onClick={bulkDelete}
+                className="h-7 px-2.5 text-[10px] font-semibold rounded-full border border-red-500/30 text-red-400/70 hover:bg-red-500/8 hover:border-red-500/50 flex items-center gap-1 transition duration-150"
+              >
+                <Trash2 className="h-2.5 w-2.5" />
+                Delete
+              </button>
+            )}
             <button
               onClick={clearSelection}
               className="h-7 w-7 rounded-full border border-white/10 text-white/30 hover:text-white/60 hover:border-white/20 flex items-center justify-center transition duration-150"
@@ -584,13 +588,15 @@ export function NotesView({ project }: NotesViewProps) {
                             <Download className="h-3 w-3" />
                             Export
                           </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }}
-                            className="flex-1 h-8 text-[11px] font-semibold rounded-full border border-red-500/20 text-red-400/50 hover:border-red-500/50 hover:text-red-400 hover:bg-red-500/5 flex items-center justify-center gap-1.5 transition duration-150"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                            Delete
-                          </button>
+                          {!isReadOnly && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }}
+                              className="flex-1 h-8 text-[11px] font-semibold rounded-full border border-red-500/20 text-red-400/50 hover:border-red-500/50 hover:text-red-400 hover:bg-red-500/5 flex items-center justify-center gap-1.5 transition duration-150"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Delete
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -616,7 +622,8 @@ export function NotesView({ project }: NotesViewProps) {
             <div className="shrink-0 flex items-center gap-3 px-6 py-3 border-b border-white/[0.06]">
               <input
                 value={titleDraft}
-                onChange={(e) => { setTitleDraft(e.target.value); setDirty(true); }}
+                readOnly={isReadOnly}
+                onChange={!isReadOnly ? (e) => { setTitleDraft(e.target.value); setDirty(true); } : undefined}
                 className="flex-1 bg-transparent text-sm font-semibold text-white/80 placeholder:text-white/20 focus:outline-none focus:text-white"
                 placeholder="Note title"
               />
@@ -626,7 +633,8 @@ export function NotesView({ project }: NotesViewProps) {
               <textarea
                 ref={textareaRef}
                 value={contentDraft}
-                onChange={(e) => { setContentDraft(e.target.value); setDirty(true); }}
+                readOnly={isReadOnly}
+                onChange={!isReadOnly ? (e) => { setContentDraft(e.target.value); setDirty(true); } : undefined}
                 onScroll={syncScroll}
                 placeholder={"Start writing…\n\n# Heading\n**bold**  *italic*  `code`"}
                 className="w-1/2 resize-none bg-transparent px-6 py-5 text-sm text-white/60 leading-relaxed placeholder:text-white/15 focus:outline-none font-mono border-r border-white/[0.06]"
@@ -639,14 +647,18 @@ export function NotesView({ project }: NotesViewProps) {
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center gap-3">
             <FileText className="h-8 w-8 text-white/10" />
-            <p className="text-sm text-white/25">Select a note or create a new one</p>
-            <button
-              onClick={createNote}
-              className="mt-1 h-9 px-4 text-xs font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 transition duration-200 ease-in-out flex items-center gap-1.5"
-            >
-              <Plus className="h-3 w-3" />
-              New note
-            </button>
+            <p className="text-sm text-white/25">
+              {isReadOnly ? "No note selected" : "Select a note or create a new one"}
+            </p>
+            {!isReadOnly && (
+              <button
+                onClick={createNote}
+                className="mt-1 h-9 px-4 text-xs font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 transition duration-200 ease-in-out flex items-center gap-1.5"
+              >
+                <Plus className="h-3 w-3" />
+                New note
+              </button>
+            )}
           </div>
         )}
       </div>

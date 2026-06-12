@@ -8,6 +8,7 @@ import {
   Compass, Flame, Code2, Boxes, Radio, Wand2, Satellite, FlaskConical, Binary,
 } from "lucide-react";
 import Link from "next/link";
+import { UserButton } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { getAvatarColor } from "@/components/projects/project-card";
@@ -55,7 +56,7 @@ const TABS: { value: TabValue; label: string; icon: React.ReactNode }[] = [
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { getProject, updateProject } = useProjects();
+  const { getProject, updateProject, isReadOnly } = useProjects();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabValue>(
     (searchParams.get("tab") as TabValue) ?? "overview"
@@ -112,16 +113,29 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           <span className="text-sm font-semibold text-white/80">Chronicle</span>
         </div>
 
-        {/* Right: New project */}
-        <div className="flex items-center shrink-0">
-          <Button
-            onClick={() => setCreateOpen(true)}
-            size="sm"
-            className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 gap-2 transition duration-200 ease-in-out"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New project
-          </Button>
+        {/* Right: New project (owner) + UserButton */}
+        <div className="flex items-center gap-2 shrink-0">
+          {!isReadOnly && (
+            <Button
+              onClick={() => setCreateOpen(true)}
+              size="sm"
+              className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 gap-2 transition duration-200 ease-in-out"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New project
+            </Button>
+          )}
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: "w-9 h-9",
+                userButtonPopoverCard: "bg-black border border-white/10",
+                userButtonPopoverActionButton: "text-white/70 hover:text-white hover:bg-white/[0.06]",
+                userButtonPopoverActionButtonText: "text-white/70",
+                userButtonPopoverFooter: "hidden",
+              },
+            }}
+          />
         </div>
       </div>
 
@@ -154,31 +168,42 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           ))}
         </div>
 
-        {/* Centre: Status dropdown */}
-        <Select
-          value={project.status}
-          onValueChange={(v) => updateProject(project.id, { status: v as ProjectStatus })}
-        >
-          <SelectTrigger className="!h-11 px-5 !rounded-full !bg-transparent !border-white/10 hover:!border-white/20 text-sm font-semibold hover:-translate-y-px active:translate-y-0 transition duration-200 ease-in-out !w-auto focus-visible:!ring-0 focus-visible:!border-white/20 [&>svg]:text-white/30 [&>svg]:size-3.5">
-            <span className={cn(
-              "capitalize",
-              project.status === "active"   && "text-primary",
-              project.status === "paused"   && "text-blue-400",
-              project.status === "archived" && "text-white/35",
-            )}>
-              {project.status}
-            </span>
-          </SelectTrigger>
-          <SelectContent
-            align="center"
-            alignItemWithTrigger={false}
-            className="!rounded-[28px] !bg-black/95 !border !border-white/10 !p-2 !shadow-none !min-w-0"
+        {/* Centre: Status — editable for owner, static badge for guests */}
+        {isReadOnly ? (
+          <span className={cn(
+            "h-11 px-5 text-sm font-semibold capitalize flex items-center rounded-full border border-white/10",
+            project.status === "active"   && "text-primary",
+            project.status === "paused"   && "text-blue-400",
+            project.status === "archived" && "text-white/35",
+          )}>
+            {project.status}
+          </span>
+        ) : (
+          <Select
+            value={project.status}
+            onValueChange={(v) => updateProject(project.id, { status: v as ProjectStatus })}
           >
-            <SelectItem value="active"   className="!rounded-full !h-11 !px-5 !py-0 !mb-1.5 text-sm !font-semibold !cursor-pointer !justify-center [&>*:first-child]:!flex-none !border !border-primary/75  !text-primary/75  [&_*]:!text-primary/75  data-[highlighted]:!bg-primary/10  data-[selected]:!bg-primary/90  data-[selected]:!border-primary  data-[selected]:!text-black  [&[data-selected]_*]:!text-black">Active</SelectItem>
-            <SelectItem value="paused"   className="!rounded-full !h-11 !px-5 !py-0 !mb-1.5 text-sm !font-semibold !cursor-pointer !justify-center [&>*:first-child]:!flex-none !border !border-blue-400/75 !text-blue-400/75 [&_*]:!text-blue-400/75 data-[highlighted]:!bg-blue-400/10  data-[selected]:!bg-blue-400/90 data-[selected]:!border-blue-400  data-[selected]:!text-black  [&[data-selected]_*]:!text-black">Paused</SelectItem>
-            <SelectItem value="archived" className="!rounded-full !h-11 !px-5 !py-0          text-sm !font-semibold !cursor-pointer !justify-center [&>*:first-child]:!flex-none !border !border-white/15  !text-white/40  [&_*]:!text-white/40  data-[highlighted]:!bg-white/5     data-[selected]:!bg-white/40    data-[selected]:!border-white/40  data-[selected]:!text-black    [&[data-selected]_*]:!text-black">Archived</SelectItem>
-          </SelectContent>
-        </Select>
+            <SelectTrigger className="!h-11 px-5 !rounded-full !bg-transparent !border-white/10 hover:!border-white/20 text-sm font-semibold hover:-translate-y-px active:translate-y-0 transition duration-200 ease-in-out !w-auto focus-visible:!ring-0 focus-visible:!border-white/20 [&>svg]:text-white/30 [&>svg]:size-3.5">
+              <span className={cn(
+                "capitalize",
+                project.status === "active"   && "text-primary",
+                project.status === "paused"   && "text-blue-400",
+                project.status === "archived" && "text-white/35",
+              )}>
+                {project.status}
+              </span>
+            </SelectTrigger>
+            <SelectContent
+              align="center"
+              alignItemWithTrigger={false}
+              className="!rounded-[28px] !bg-black/95 !border !border-white/10 !p-2 !shadow-none !min-w-0"
+            >
+              <SelectItem value="active"   className="!rounded-full !h-11 !px-5 !py-0 !mb-1.5 text-sm !font-semibold !cursor-pointer !justify-center [&>*:first-child]:!flex-none !border !border-primary/75  !text-primary/75  [&_*]:!text-primary/75  data-[highlighted]:!bg-primary/10  data-[selected]:!bg-primary/90  data-[selected]:!border-primary  data-[selected]:!text-black  [&[data-selected]_*]:!text-black">Active</SelectItem>
+              <SelectItem value="paused"   className="!rounded-full !h-11 !px-5 !py-0 !mb-1.5 text-sm !font-semibold !cursor-pointer !justify-center [&>*:first-child]:!flex-none !border !border-blue-400/75 !text-blue-400/75 [&_*]:!text-blue-400/75 data-[highlighted]:!bg-blue-400/10  data-[selected]:!bg-blue-400/90 data-[selected]:!border-blue-400  data-[selected]:!text-black  [&[data-selected]_*]:!text-black">Paused</SelectItem>
+              <SelectItem value="archived" className="!rounded-full !h-11 !px-5 !py-0          text-sm !font-semibold !cursor-pointer !justify-center [&>*:first-child]:!flex-none !border !border-white/15  !text-white/40  [&_*]:!text-white/40  data-[highlighted]:!bg-white/5     data-[selected]:!bg-white/40    data-[selected]:!border-white/40  data-[selected]:!text-black    [&[data-selected]_*]:!text-black">Archived</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
 
         {/* Right: Action buttons — violet complement, same shape as New project */}
         <div className="flex items-center gap-2 flex-1 justify-end">

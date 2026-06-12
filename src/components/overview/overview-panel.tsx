@@ -28,11 +28,13 @@ function EditableField({
   value,
   placeholder,
   onSave,
+  isReadOnly = false,
 }: {
   label: string;
   value: string | null;
   placeholder: string;
   onSave: (val: string | null) => void;
+  isReadOnly?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft,   setDraft]   = useState(value ?? "");
@@ -50,7 +52,7 @@ function EditableField({
     <div>
       <div className="flex items-center justify-between mb-3">
         <SectionLabel>{label}</SectionLabel>
-        {!editing && (
+        {!editing && !isReadOnly && (
           <button
             onClick={() => { setEditing(true); setDraft(value ?? ""); }}
             className="text-zinc-700 hover:text-zinc-400 p-1 -mt-1 rounded transition-colors"
@@ -60,7 +62,7 @@ function EditableField({
         )}
       </div>
 
-      {editing ? (
+      {editing && !isReadOnly ? (
         <div className="space-y-2.5">
           <Textarea
             value={draft}
@@ -83,10 +85,11 @@ function EditableField({
         </div>
       ) : (
         <p
-          onClick={() => { setEditing(true); setDraft(value ?? ""); }}
+          onClick={!isReadOnly ? () => { setEditing(true); setDraft(value ?? ""); } : undefined}
           className={cn(
-            "text-sm leading-relaxed cursor-text hover:text-zinc-100 transition-colors",
-            value ? "text-zinc-300" : "text-zinc-600 italic"
+            "text-sm leading-relaxed transition-colors",
+            value ? "text-zinc-300" : "text-zinc-600 italic",
+            !isReadOnly && "cursor-text hover:text-zinc-100"
           )}
         >
           {value ?? placeholder}
@@ -97,7 +100,7 @@ function EditableField({
 }
 
 export function OverviewPanel({ project, onOpenNotes }: OverviewPanelProps) {
-  const { updateProject } = useProjects();
+  const { updateProject, isReadOnly } = useProjects();
 
   return (
     <div className="h-full flex gap-6 overflow-hidden">
@@ -110,6 +113,7 @@ export function OverviewPanel({ project, onOpenNotes }: OverviewPanelProps) {
           value={project.brief}
           placeholder="One-line summary of the project…"
           onSave={(val) => updateProject(project.id, { brief: val })}
+          isReadOnly={isReadOnly}
         />
 
         <EditableField
@@ -117,6 +121,7 @@ export function OverviewPanel({ project, onOpenNotes }: OverviewPanelProps) {
           value={project.problemStatement}
           placeholder="What problem does this project solve?"
           onSave={(val) => updateProject(project.id, { problemStatement: val })}
+          isReadOnly={isReadOnly}
         />
 
         <EditableField
@@ -124,6 +129,7 @@ export function OverviewPanel({ project, onOpenNotes }: OverviewPanelProps) {
           value={project.description}
           placeholder="Add a description…"
           onSave={(val) => updateProject(project.id, { description: val })}
+          isReadOnly={isReadOnly}
         />
 
         {/* GitHub */}

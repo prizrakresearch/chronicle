@@ -13,7 +13,7 @@ interface AddRoadmapItemFormProps {
 }
 
 export function AddRoadmapItemForm({ projectId, status, sortOrderBase }: AddRoadmapItemFormProps) {
-  const { addRoadmapItem } = useProjects();
+  const { addRoadmapItem, isReadOnly } = useProjects();
   const [active, setActive] = useState(false);
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -45,6 +45,8 @@ export function AddRoadmapItemForm({ projectId, status, sortOrderBase }: AddRoad
       setActive(false);
     }
   }
+
+  if (isReadOnly) return null;
 
   if (!active) {
     return (

@@ -52,7 +52,7 @@ function ProjectAvatar({ name, logoUrl }: { name: string; logoUrl: string | null
 }
 
 export function ProjectRow({ project, dimmed = false }: ProjectRowProps) {
-  const { updateProject, deleteProject, pin, setPin } = useProjects();
+  const { updateProject, deleteProject, pin, setPin, isReadOnly } = useProjects();
   const router = useRouter();
   const [pinSetupOpen, setPinSetupOpen] = useState(false);
   const repoShortName = project.githubRepo?.fullName.split("/")[1] ?? null;
@@ -121,64 +121,66 @@ export function ProjectRow({ project, dimmed = false }: ProjectRowProps) {
           </span>
         </div>
 
-        {/* Context menu — stopPropagation prevents row onClick from firing */}
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 shrink-0">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              className="h-7 w-7 flex items-center justify-center rounded-md text-white/30 hover:text-white/70 hover:bg-white/[0.06] transition-colors"
-              onClick={(e: React.MouseEvent) => e.stopPropagation()}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-
-              {/* Pin / Unpin */}
-              <DropdownMenuItem
-                onClick={() => updateProject(project.id, { pinned: !isPinned })}
+        {/* Context menu — hidden for read-only guests */}
+        {!isReadOnly && (
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 shrink-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="h-7 w-7 flex items-center justify-center rounded-md text-white/30 hover:text-white/70 hover:bg-white/[0.06] transition-colors"
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
               >
-                {isPinned ? (
-                  <><PinOff className="h-3.5 w-3.5 mr-2 opacity-60" />Unpin</>
-                ) : (
-                  <><Pin className="h-3.5 w-3.5 mr-2 opacity-60 rotate-45" />Pin to top</>
-                )}
-              </DropdownMenuItem>
+                <MoreHorizontal className="h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
 
-              {/* Hide / Unhide */}
-              <DropdownMenuItem onClick={isHidden
-                ? () => updateProject(project.id, { hidden: false })
-                : handleHide
-              }>
-                <EyeOff className="h-3.5 w-3.5 mr-2 opacity-60" />
-                {isHidden ? "Unhide" : "Hide"}
-              </DropdownMenuItem>
+                {/* Pin / Unpin */}
+                <DropdownMenuItem
+                  onClick={() => updateProject(project.id, { pinned: !isPinned })}
+                >
+                  {isPinned ? (
+                    <><PinOff className="h-3.5 w-3.5 mr-2 opacity-60" />Unpin</>
+                  ) : (
+                    <><Pin className="h-3.5 w-3.5 mr-2 opacity-60 rotate-45" />Pin to top</>
+                  )}
+                </DropdownMenuItem>
 
-              <DropdownMenuSeparator />
+                {/* Hide / Unhide */}
+                <DropdownMenuItem onClick={isHidden
+                  ? () => updateProject(project.id, { hidden: false })
+                  : handleHide
+                }>
+                  <EyeOff className="h-3.5 w-3.5 mr-2 opacity-60" />
+                  {isHidden ? "Unhide" : "Hide"}
+                </DropdownMenuItem>
 
-              {/* Archive / Restore */}
-              <DropdownMenuItem
-                onClick={() => updateProject(project.id, {
-                  status: project.status === "archived" ? "active" : "archived",
-                })}
-              >
-                {project.status === "archived" ? (
-                  <><RotateCcw className="h-3.5 w-3.5 mr-2 opacity-60" />Restore</>
-                ) : (
-                  <><Archive className="h-3.5 w-3.5 mr-2 opacity-60" />Archive</>
-                )}
-              </DropdownMenuItem>
+                <DropdownMenuSeparator />
 
-              <DropdownMenuSeparator />
+                {/* Archive / Restore */}
+                <DropdownMenuItem
+                  onClick={() => updateProject(project.id, {
+                    status: project.status === "archived" ? "active" : "archived",
+                  })}
+                >
+                  {project.status === "archived" ? (
+                    <><RotateCcw className="h-3.5 w-3.5 mr-2 opacity-60" />Restore</>
+                  ) : (
+                    <><Archive className="h-3.5 w-3.5 mr-2 opacity-60" />Archive</>
+                  )}
+                </DropdownMenuItem>
 
-              {/* Delete */}
-              <DropdownMenuItem
-                onClick={() => deleteProject(project.id)}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-2" />Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+                <DropdownMenuSeparator />
+
+                {/* Delete */}
+                <DropdownMenuItem
+                  onClick={() => deleteProject(project.id)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-2" />Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
       </div>
 
       {/* PIN setup dialog (triggered when hiding without a PIN) */}

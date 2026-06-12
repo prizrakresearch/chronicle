@@ -38,7 +38,7 @@ interface RoadmapItemProps {
 export function RoadmapItem({
   item, isDragged, isDraggingAny, onDragStart, onDragEnd, onDropBefore,
 }: RoadmapItemProps) {
-  const { updateRoadmapItem, deleteRoadmapItem } = useProjects();
+  const { updateRoadmapItem, deleteRoadmapItem, isReadOnly } = useProjects();
   const [editing,   setEditing]   = useState(false);
   const [editValue, setEditValue] = useState(item.title);
   const [hovered,   setHovered]   = useState(false);
@@ -112,9 +112,9 @@ export function RoadmapItem({
 
       <div
         ref={rowRef}
-        draggable
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
+        draggable={!isReadOnly}
+        onDragStart={!isReadOnly ? handleDragStart : undefined}
+        onDragEnd={!isReadOnly ? handleDragEnd : undefined}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -123,46 +123,53 @@ export function RoadmapItem({
         className={cn(
           "flex items-center gap-2 py-2 px-2 rounded-md hover:bg-zinc-800/50 group transition-all duration-150 cursor-default",
           isDragged      && "opacity-30 scale-[0.98]",
-          isDraggingAny  && !isDragged && "cursor-grab",
-          !isDraggingAny && "cursor-default",
+          !isReadOnly && isDraggingAny  && !isDragged && "cursor-grab",
         )}
       >
-        {/* Drag handle */}
-        <div className={cn(
-          "shrink-0 text-zinc-600 transition-opacity duration-150 cursor-grab active:cursor-grabbing",
-          hovered || isDraggingAny ? "opacity-100" : "opacity-0"
-        )}>
-          <GripVertical className="h-3.5 w-3.5" />
-        </div>
-
-        {/* Status icon / dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger className={cn(
-            "shrink-0 p-0.5 rounded hover:bg-zinc-700 transition-colors",
-            STATUS_ICON_COLORS[item.status]
+        {/* Drag handle — hidden for guests */}
+        {!isReadOnly && (
+          <div className={cn(
+            "shrink-0 text-zinc-600 transition-opacity duration-150 cursor-grab active:cursor-grabbing",
+            hovered || isDraggingAny ? "opacity-100" : "opacity-0"
           )}>
+            <GripVertical className="h-3.5 w-3.5" />
+          </div>
+        )}
+
+        {/* Status icon — dropdown for owner, static for guest */}
+        {isReadOnly ? (
+          <div className={cn("shrink-0 p-0.5", STATUS_ICON_COLORS[item.status])}>
             <StatusIcon className="h-3.5 w-3.5" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-40">
-            {(["planned", "in_progress", "completed"] as RoadmapStatus[]).map((s) => {
-              const Icon = STATUS_ICONS[s];
-              return (
-                <DropdownMenuItem
-                  key={s}
-                  onClick={() => updateRoadmapItem(item.id, { status: s })}
-                  className={cn("text-xs gap-2", s === item.status && "bg-zinc-800")}
-                >
-                  <Icon className={cn("h-3.5 w-3.5", STATUS_ICON_COLORS[s])} />
-                  {ROADMAP_STATUS_LABELS[s]}
-                </DropdownMenuItem>
-              );
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </div>
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger className={cn(
+              "shrink-0 p-0.5 rounded hover:bg-zinc-700 transition-colors",
+              STATUS_ICON_COLORS[item.status]
+            )}>
+              <StatusIcon className="h-3.5 w-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-40">
+              {(["planned", "in_progress", "completed"] as RoadmapStatus[]).map((s) => {
+                const Icon = STATUS_ICONS[s];
+                return (
+                  <DropdownMenuItem
+                    key={s}
+                    onClick={() => updateRoadmapItem(item.id, { status: s })}
+                    className={cn("text-xs gap-2", s === item.status && "bg-zinc-800")}
+                  >
+                    <Icon className={cn("h-3.5 w-3.5", STATUS_ICON_COLORS[s])} />
+                    {ROADMAP_STATUS_LABELS[s]}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         {/* Title */}
         <div className="flex-1 min-w-0">
-          {editing ? (
+          {editing && !isReadOnly ? (
             <input
               ref={inputRef}
               value={editValue}
@@ -173,10 +180,11 @@ export function RoadmapItem({
             />
           ) : (
             <span
-              onClick={() => { setEditing(true); setEditValue(item.title); }}
+              onClick={!isReadOnly ? () => { setEditing(true); setEditValue(item.title); } : undefined}
               className={cn(
-                "text-sm cursor-pointer select-none",
-                item.status === "completed" ? "line-through text-zinc-500" : "text-zinc-200"
+                "text-sm select-none",
+                item.status === "completed" ? "line-through text-zinc-500" : "text-zinc-200",
+                !isReadOnly && "cursor-pointer"
               )}
             >
               {item.title}
@@ -184,16 +192,18 @@ export function RoadmapItem({
           )}
         </div>
 
-        {/* Delete */}
-        <button
-          onClick={() => deleteRoadmapItem(item.id)}
-          className={cn(
-            "p-1 rounded text-zinc-600 hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0",
-            hovered ? "opacity-100" : "opacity-0"
-          )}
-        >
-          <Trash2 className="h-3 w-3" />
-        </button>
+        {/* Delete — hidden for guests */}
+        {!isReadOnly && (
+          <button
+            onClick={() => deleteRoadmapItem(item.id)}
+            className={cn(
+              "p-1 rounded text-zinc-600 hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0",
+              hovered ? "opacity-100" : "opacity-0"
+            )}
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        )}
       </div>
 
       {/* Drop-below indicator */}

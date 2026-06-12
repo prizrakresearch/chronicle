@@ -25,7 +25,7 @@ const STATUS_FILTERS: { label: string; value: ProjectStatus | "all"; icon: React
 ];
 
 export function ProjectGrid() {
-  const { projects, pin, setPin } = useProjects();
+  const { projects, pin, setPin, isReadOnly } = useProjects();
   const [search,       setSearch]       = useState("");
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | "all">("all");
   const [createOpen,   setCreateOpen]   = useState(false);
@@ -160,14 +160,16 @@ export function ProjectGrid() {
       {/* Full-width topbar */}
       <div className="shrink-0 py-5 px-6 flex items-center justify-between z-20">
         <h1 className="text-sm font-semibold text-white/80">Chronicle</h1>
-        <Button
-          onClick={() => setCreateOpen(true)}
-          size="sm"
-          className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 gap-2 transition duration-200 ease-in-out"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          New project
-        </Button>
+        {!isReadOnly && (
+          <Button
+            onClick={() => setCreateOpen(true)}
+            size="sm"
+            className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 gap-2 transition duration-200 ease-in-out"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New project
+          </Button>
+        )}
       </div>
 
       {/* 70 / 30 split */}
@@ -246,7 +248,7 @@ export function ProjectGrid() {
                       ? "Try a different search or filter"
                       : "Create your first project to get started"}
                   </p>
-                  {!search && statusFilter === "all" && (
+                  {!search && statusFilter === "all" && !isReadOnly && (
                     <Button
                       onClick={() => setCreateOpen(true)}
                       size="sm"

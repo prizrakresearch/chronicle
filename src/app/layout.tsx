@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
+import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "@/components/layout/theme-provider";
 import { ClientBackground } from "@/components/layout/client-background";
 import { ProjectsProvider } from "@/lib/store/projects-context";
@@ -62,6 +63,7 @@ export default function RootLayout({
         <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/the-seasons" />
       </head>
       <body className="text-foreground antialiased">
+        <ClerkProvider>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
@@ -97,6 +99,7 @@ export default function RootLayout({
             </ProjectsProvider>
           </TooltipProvider>
         </ThemeProvider>
+        </ClerkProvider>
       </body>
     </html>
   );
