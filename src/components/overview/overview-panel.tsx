@@ -1,24 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { GitBranch, Star, Clock, Map, RefreshCw, Pencil } from "lucide-react";
+import { GitBranch, Star, RefreshCw, Pencil, NotebookPen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select";
-import { STATUS_LABELS } from "@/lib/utils/constants";
-import { ProjectStatusBadge } from "@/components/projects/project-status-badge";
+import { ProjectCalendarPanel } from "./project-calendar-panel";
 import { formatLastSynced } from "@/lib/utils/format";
 import { useProjects } from "@/lib/store/projects-context";
 import { cn } from "@/lib/utils";
-import type { Project, ProjectStatus } from "@/types";
+import type { Project } from "@/types";
 
 interface OverviewPanelProps {
   project: Project;
+  onOpenNotes?: () => void;
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -29,149 +23,168 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function OverviewPanel({ project }: OverviewPanelProps) {
-  const { updateProject, getTimeline, getRoadmapItems } = useProjects();
-  const [editingDesc, setEditingDesc] = useState(false);
-  const [descValue, setDescValue] = useState(project.description ?? "");
-  const [savingDesc, setSavingDesc] = useState(false);
+function EditableField({
+  label,
+  value,
+  placeholder,
+  onSave,
+}: {
+  label: string;
+  value: string | null;
+  placeholder: string;
+  onSave: (val: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft,   setDraft]   = useState(value ?? "");
+  const [saving,  setSaving]  = useState(false);
 
-  const timelineCount = getTimeline(project.id).length;
-  const roadmapCount = getRoadmapItems(project.id).length;
-
-  async function handleSaveDesc() {
-    setSavingDesc(true);
+  async function handleSave() {
+    setSaving(true);
     await new Promise((r) => setTimeout(r, 150));
-    updateProject(project.id, { description: descValue.trim() || null });
-    setSavingDesc(false);
-    setEditingDesc(false);
+    onSave(draft.trim() || null);
+    setSaving(false);
+    setEditing(false);
   }
 
   return (
-    <div className="max-w-2xl space-y-8">
-
-      {/* Description */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <SectionLabel>Description</SectionLabel>
-          {!editingDesc && (
-            <button
-              onClick={() => { setEditingDesc(true); setDescValue(project.description ?? ""); }}
-              className="text-zinc-700 hover:text-zinc-400 p-1 -mt-1 rounded transition-colors"
-            >
-              <Pencil className="h-3 w-3" />
-            </button>
-          )}
-        </div>
-
-        {editingDesc ? (
-          <div className="space-y-2.5">
-            <Textarea
-              value={descValue}
-              onChange={(e) => setDescValue(e.target.value)}
-              rows={3}
-              autoFocus
-              placeholder="Describe this project…"
-              className="bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-zinc-600 resize-none text-sm leading-relaxed"
-            />
-            <div className="flex gap-2">
-              <Button size="sm" onClick={handleSaveDesc} disabled={savingDesc}
-                className="h-7 text-xs bg-zinc-100 text-zinc-900 hover:bg-white px-3">
-                {savingDesc ? "Saving…" : "Save"}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setEditingDesc(false)}
-                className="h-7 text-xs text-zinc-500 hover:text-zinc-300">
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <p
-            onClick={() => { setEditingDesc(true); setDescValue(project.description ?? ""); }}
-            className={cn(
-              "text-sm leading-relaxed cursor-text hover:text-zinc-100 transition-colors",
-              project.description ? "text-zinc-300" : "text-zinc-600 italic"
-            )}
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <SectionLabel>{label}</SectionLabel>
+        {!editing && (
+          <button
+            onClick={() => { setEditing(true); setDraft(value ?? ""); }}
+            className="text-zinc-700 hover:text-zinc-400 p-1 -mt-1 rounded transition-colors"
           >
-            {project.description ?? "Add a description…"}
-          </p>
+            <Pencil className="h-3 w-3" />
+          </button>
         )}
       </div>
 
-      {/* Status */}
-      <div>
-        <SectionLabel>Status</SectionLabel>
-        <Select value={project.status} onValueChange={(v) => updateProject(project.id, { status: v as ProjectStatus })}>
-          <SelectTrigger className="w-36 bg-zinc-900 border-zinc-800 text-zinc-100 h-8 text-sm hover:border-zinc-700 transition-colors">
-            <span className="flex items-center gap-2">
-              <ProjectStatusBadge status={project.status} size="sm" />
-            </span>
-          </SelectTrigger>
-          <SelectContent className="bg-zinc-900 border-zinc-800">
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="paused">Paused</SelectItem>
-            <SelectItem value="archived">Archived</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Stats */}
-      <div>
-        <SectionLabel>Stats</SectionLabel>
-        <div className="grid grid-cols-2 gap-3 max-w-xs">
-          <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-4">
-            <div className="flex items-center gap-1.5 text-zinc-600 mb-3">
-              <Clock className="h-3.5 w-3.5" />
-              <span className="text-[11px] uppercase tracking-wide font-semibold">Events</span>
-            </div>
-            <p className="text-3xl font-bold text-zinc-100 tabular-nums">{timelineCount}</p>
-          </div>
-          <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-4">
-            <div className="flex items-center gap-1.5 text-zinc-600 mb-3">
-              <Map className="h-3.5 w-3.5" />
-              <span className="text-[11px] uppercase tracking-wide font-semibold">Roadmap</span>
-            </div>
-            <p className="text-3xl font-bold text-zinc-100 tabular-nums">{roadmapCount}</p>
+      {editing ? (
+        <div className="space-y-2.5">
+          <Textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={3}
+            autoFocus
+            placeholder={placeholder}
+            className="bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-zinc-600 resize-none text-sm leading-relaxed"
+          />
+          <div className="flex gap-2">
+            <Button size="sm" onClick={handleSave} disabled={saving}
+              className="h-7 text-xs bg-zinc-100 text-zinc-900 hover:bg-white px-3">
+              {saving ? "Saving…" : "Save"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}
+              className="h-7 text-xs text-zinc-500 hover:text-zinc-300">
+              Cancel
+            </Button>
           </div>
         </div>
-      </div>
-
-      {/* GitHub */}
-      {project.githubRepo && (
-        <div>
-          <SectionLabel>GitHub</SectionLabel>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <a
-                href={`https://github.com/${project.githubRepo.fullName}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm font-semibold text-zinc-100 hover:text-white transition-colors group"
-              >
-                <GitBranch className="h-4 w-4 text-zinc-400 group-hover:text-zinc-300" />
-                {project.githubRepo.fullName}
-              </a>
-              <span className="flex items-center gap-1 text-xs text-zinc-500">
-                <Star className="h-3 w-3" />
-                {project.githubRepo.stars}
-              </span>
-            </div>
-            {project.githubRepo.description && (
-              <p className="text-xs text-zinc-500 mb-3 leading-relaxed">
-                {project.githubRepo.description}
-              </p>
-            )}
-            <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
-              <span className="text-xs text-zinc-600">
-                {formatLastSynced(project.githubRepo.lastSyncedAt)}
-              </span>
-              <button className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
-                <RefreshCw className="h-3 w-3" />
-                Sync now
-              </button>
-            </div>
-          </div>
-        </div>
+      ) : (
+        <p
+          onClick={() => { setEditing(true); setDraft(value ?? ""); }}
+          className={cn(
+            "text-sm leading-relaxed cursor-text hover:text-zinc-100 transition-colors",
+            value ? "text-zinc-300" : "text-zinc-600 italic"
+          )}
+        >
+          {value ?? placeholder}
+        </p>
       )}
+    </div>
+  );
+}
+
+export function OverviewPanel({ project, onOpenNotes }: OverviewPanelProps) {
+  const { updateProject } = useProjects();
+
+  return (
+    <div className="h-full flex gap-6 overflow-hidden">
+
+      {/* ── Left column: text fields ── */}
+      <div className="flex-1 flex flex-col gap-8 overflow-y-auto min-h-0 pr-2">
+
+        <EditableField
+          label="Brief"
+          value={project.brief}
+          placeholder="One-line summary of the project…"
+          onSave={(val) => updateProject(project.id, { brief: val })}
+        />
+
+        <EditableField
+          label="Problem Statement"
+          value={project.problemStatement}
+          placeholder="What problem does this project solve?"
+          onSave={(val) => updateProject(project.id, { problemStatement: val })}
+        />
+
+        <EditableField
+          label="Description"
+          value={project.description}
+          placeholder="Add a description…"
+          onSave={(val) => updateProject(project.id, { description: val })}
+        />
+
+        {/* GitHub */}
+        {project.githubRepo && (
+          <div>
+            <SectionLabel>GitHub</SectionLabel>
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <a
+                  href={`https://github.com/${project.githubRepo.fullName}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm font-semibold text-zinc-100 hover:text-white transition-colors group"
+                >
+                  <GitBranch className="h-4 w-4 text-zinc-400 group-hover:text-zinc-300" />
+                  {project.githubRepo.fullName}
+                </a>
+                <span className="flex items-center gap-1 text-xs text-zinc-500">
+                  <Star className="h-3 w-3" />
+                  {project.githubRepo.stars}
+                </span>
+              </div>
+              {project.githubRepo.description && (
+                <p className="text-xs text-zinc-500 mb-3 leading-relaxed">
+                  {project.githubRepo.description}
+                </p>
+              )}
+              <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
+                <span className="text-xs text-zinc-600">
+                  {formatLastSynced(project.githubRepo.lastSyncedAt)}
+                </span>
+                <button className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+                  <RefreshCw className="h-3 w-3" />
+                  Sync now
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      {/* ── Right column: calendar + open notes ── */}
+      <div className="w-[28%] shrink-0 flex flex-col gap-3">
+
+        <div className="flex-1 rounded-[28px] border border-border/50 bg-black/50 overflow-hidden">
+          <ProjectCalendarPanel
+            events={project.calendarEvents}
+            onEventsChange={(events) => updateProject(project.id, { calendarEvents: events })}
+          />
+        </div>
+
+        <button
+          onClick={onOpenNotes}
+          className="shrink-0 h-11 px-5 w-full text-sm font-semibold rounded-full bg-transparent text-white/30 border border-white/10 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 flex items-center justify-center gap-2 transition duration-200 ease-in-out"
+        >
+          <NotebookPen className="h-3.5 w-3.5" />
+          Open notes
+        </button>
+
+      </div>
 
     </div>
   );

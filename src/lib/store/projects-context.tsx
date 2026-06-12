@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback } from "react";
-import type { Project, TimelineEvent, RoadmapItem, ProjectLink, ProjectStatus, RoadmapStatus } from "@/types";
+import type { Project, TimelineEvent, RoadmapItem, ProjectLink, ProjectFile, ProjectStatus, RoadmapStatus } from "@/types";
 import {
   MOCK_PROJECTS,
   MOCK_TIMELINE_EVENTS,
@@ -15,7 +15,7 @@ function uid() {
 
 interface ProjectsContextValue {
   projects: Project[];
-  addProject: (data: { name: string; description: string | null; status: ProjectStatus }) => Project;
+  addProject: (data: { name: string; description: string | null; status: ProjectStatus; logoUrl?: string | null }) => Project;
   updateProject: (id: string, updates: Partial<Omit<Project, "id" | "createdAt" | "githubRepo">>) => void;
   deleteProject: (id: string) => void;
   getProject: (id: string) => Project | undefined;
@@ -35,6 +35,15 @@ interface ProjectsContextValue {
   getLinks: (projectId: string) => ProjectLink[];
   addLink: (data: Omit<ProjectLink, "id">) => ProjectLink;
   deleteLink: (id: string) => void;
+
+  projectFiles: ProjectFile[];
+  getProjectFiles: (projectId: string) => ProjectFile[];
+  addProjectFile: (data: Omit<ProjectFile, "id">) => ProjectFile;
+  deleteProjectFile: (id: string) => void;
+
+  pin: string | null;
+  setPin: (pin: string) => void;
+  clearPin: () => void;
 }
 
 const ProjectsContext = createContext<ProjectsContextValue | null>(null);
@@ -44,18 +53,40 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>(MOCK_TIMELINE_EVENTS);
   const [roadmapItems, setRoadmapItems] = useState<RoadmapItem[]>(MOCK_ROADMAP_ITEMS);
   const [links, setLinks] = useState<ProjectLink[]>(MOCK_LINKS);
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
+  const [pin, setPinState] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem("chronicle_pin") : null
+  );
 
-  const addProject = useCallback((data: { name: string; description: string | null; status: ProjectStatus }): Project => {
+  const setPin = useCallback((newPin: string) => {
+    localStorage.setItem("chronicle_pin", newPin);
+    setPinState(newPin);
+  }, []);
+
+  const clearPin = useCallback(() => {
+    localStorage.removeItem("chronicle_pin");
+    setPinState(null);
+  }, []);
+
+  const addProject = useCallback((data: { name: string; description: string | null; status: ProjectStatus; logoUrl?: string | null }): Project => {
     const now = new Date();
     const project: Project = {
       id: "proj_" + uid(),
       name: data.name,
+      brief: null,
       description: data.description,
+      problemStatement: null,
       status: data.status,
-      logoUrl: null,
+      logoUrl: data.logoUrl ?? null,
       createdAt: now,
       updatedAt: now,
       githubRepo: null,
+      calendarEvents: [],
+      projectNotes: [],
+      markdownNotes: [],
+      credentials: [],
+      pinned: false,
+      hidden: false,
       _count: { timelineEvents: 0, roadmapItems: 0 },
     };
     setProjects((prev) => [project, ...prev]);
@@ -73,6 +104,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     setTimelineEvents((prev) => prev.filter((e) => e.projectId !== id));
     setRoadmapItems((prev) => prev.filter((r) => r.projectId !== id));
     setLinks((prev) => prev.filter((l) => l.projectId !== id));
+    setProjectFiles((prev) => prev.filter((f) => f.projectId !== id));
   }, []);
 
   const getProject = useCallback((id: string) => projects.find((p) => p.id === id), [projects]);
@@ -160,6 +192,21 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     setLinks((prev) => prev.filter((l) => l.id !== id));
   }, []);
 
+  const getProjectFiles = useCallback(
+    (projectId: string) => projectFiles.filter((f) => f.projectId === projectId),
+    [projectFiles]
+  );
+
+  const addProjectFile = useCallback((data: Omit<ProjectFile, "id">): ProjectFile => {
+    const file: ProjectFile = { ...data, id: "file_" + uid() };
+    setProjectFiles((prev) => [file, ...prev]);
+    return file;
+  }, []);
+
+  const deleteProjectFile = useCallback((id: string) => {
+    setProjectFiles((prev) => prev.filter((f) => f.id !== id));
+  }, []);
+
   return (
     <ProjectsContext.Provider
       value={{
@@ -181,6 +228,13 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         getLinks,
         addLink,
         deleteLink,
+        projectFiles,
+        getProjectFiles,
+        addProjectFile,
+        deleteProjectFile,
+        pin,
+        setPin,
+        clearPin,
       }}
     >
       {children}

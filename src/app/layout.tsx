@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/layout/theme-provider";
-import { DitherBackground } from "@/components/layout/dither-background";
+import { ClientBackground } from "@/components/layout/client-background";
 import { ProjectsProvider } from "@/lib/store/projects-context";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CommandPalette } from "@/components/search/command-palette";
@@ -24,8 +24,26 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Chronicle",
+  title: {
+    default: "Chronicle",
+    template: "%s",
+  },
   description: "Personal project operating system",
+  manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-512.png",   sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    shortcut: "/favicon-32.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Chronicle",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export default function RootLayout({
@@ -39,6 +57,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable}`}
       suppressHydrationWarning
     >
+      <head>
+        {/* The Seasons — decorative serif used for the splash "C" mark */}
+        <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/the-seasons" />
+      </head>
       <body className="text-foreground antialiased">
         <ThemeProvider
           attribute="class"
@@ -46,20 +68,8 @@ export default function RootLayout({
           enableSystem={false}
           disableTransitionOnChange
         >
-          <DitherBackground
-            waveColor={[0.243, 0.251, 0.243]}
-            colorNum={2.5}
-            waveAmplitude={0.08}
-            waveFrequency={6.7}
-            waveSpeed={0.05}
-            mouseRadius={0.5}
-            enableMouseInteraction={true}
-          />
-          {/* 40% black overlay over the dither canvas */}
-          <div
-            className="fixed inset-0 bg-black pointer-events-none"
-            style={{ opacity: 0.4, zIndex: -5 }}
-          />
+          {/* Dither canvas + black overlay + splash screen (coordinates z-index) */}
+          <ClientBackground />
           <TooltipProvider>
             <ProjectsProvider>
               <CommandPalette />

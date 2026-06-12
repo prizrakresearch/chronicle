@@ -125,6 +125,14 @@ interface DitherBackgroundProps {
   pixelSize?: number;
   enableMouseInteraction?: boolean;
   mouseRadius?: number;
+  /** ms to ramp waveColor from [0,0,0] → target on mount. 0 = instant. */
+  rampDurationMs?: number;
+  /**
+   * When true the canvas renders at z-index 9997 (above page content) so it
+   * can be used as a splash-screen background. When false (default) it sits at
+   * z-index -10 behind everything.
+   */
+  elevated?: boolean;
 }
 
 export function DitherBackground({
@@ -136,13 +144,15 @@ export function DitherBackground({
   pixelSize = 2,
   enableMouseInteraction = true,
   mouseRadius = 0.5,
+  rampDurationMs = 0,
+  elevated = false,
 }: DitherBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Live props — updated every render, read inside the rAF loop without re-init
-  const propsRef = useRef({ waveSpeed, waveFrequency, waveAmplitude, waveColor, colorNum, pixelSize, enableMouseInteraction, mouseRadius });
+  const propsRef = useRef({ waveSpeed, waveFrequency, waveAmplitude, waveColor, colorNum, pixelSize, enableMouseInteraction, mouseRadius, rampDurationMs });
   useEffect(() => {
-    propsRef.current = { waveSpeed, waveFrequency, waveAmplitude, waveColor, colorNum, pixelSize, enableMouseInteraction, mouseRadius };
+    propsRef.current = { waveSpeed, waveFrequency, waveAmplitude, waveColor, colorNum, pixelSize, enableMouseInteraction, mouseRadius, rampDurationMs };
   });
 
   useEffect(() => {
@@ -215,12 +225,21 @@ export function DitherBackground({
       const p = propsRef.current;
       const t = (performance.now() - t0) / 1000;
 
+      // Intensity ramp: scale waveColor from [0,0,0] → target over rampDurationMs
+      let intensity = 1.0;
+      if (p.rampDurationMs > 0) {
+        const raw = Math.min(1.0, (t * 1000) / p.rampDurationMs);
+        // Smoothstep easing — slow start, fast middle, settles gently
+        intensity = raw * raw * (3.0 - 2.0 * raw);
+      }
+      const wc = p.waveColor;
+
       gl.uniform2f(U.res,     canvas.width, canvas.height);
       gl.uniform1f(U.time,    t);
       gl.uniform1f(U.speed,   p.waveSpeed);
       gl.uniform1f(U.freq,    p.waveFrequency);
       gl.uniform1f(U.amp,     p.waveAmplitude);
-      gl.uniform3f(U.color,   p.waveColor[0], p.waveColor[1], p.waveColor[2]);
+      gl.uniform3f(U.color,   wc[0] * intensity, wc[1] * intensity, wc[2] * intensity);
       gl.uniform2f(U.mpos,    mx, my);
       gl.uniform1i(U.menable, p.enableMouseInteraction ? 1 : 0);
       gl.uniform1f(U.mrad,    p.mouseRadius);
@@ -245,7 +264,8 @@ export function DitherBackground({
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 -z-10 w-full h-full"
+      className="fixed inset-0 w-full h-full"
+      style={{ zIndex: elevated ? 9997 : -10, backgroundColor: "black" }}
     />
   );
 }
