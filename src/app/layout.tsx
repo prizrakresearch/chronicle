@@ -181,7 +181,7 @@ export default function RootLayout({
                 />
                 {/* bottom bar — fixed on top */}
                 <div className="fixed bottom-0 left-0 right-0 z-20 px-6 py-3 flex items-center justify-center gap-2 text-xs text-white/25">
-                  <span>v0.1.0</span>
+                  <span>v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.1.0"}</span>
                   <span className="text-white/15">|</span>
                   <span>Developed by <span className="font-bold text-white/35" style={{ fontFamily: "var(--font-playfair)" }}>Prizrak Labs</span></span>
                 </div>
