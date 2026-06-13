@@ -77,7 +77,7 @@ export function ProjectRow({ project, dimmed = false }: ProjectRowProps) {
     <>
       <div
         className={cn(
-          "group flex items-center gap-4 pl-1 pr-4 py-2 rounded-full border border-border/50 bg-black/5 backdrop-blur-[4px] hover:bg-white/[0.04] hover:border-border/80 transition-colors duration-200 ease-out cursor-pointer",
+          "group flex items-center gap-4 pl-2 pr-4 py-2 rounded-full border border-border/50 bg-black/5 backdrop-blur-[4px] hover:bg-white/[0.04] hover:border-border/80 transition-colors duration-200 ease-out cursor-pointer",
           dimmed && "opacity-50 hover:opacity-80"
         )}
         onClick={() => router.push(`/projects/${project.id}`)}

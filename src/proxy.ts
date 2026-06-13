@@ -5,9 +5,10 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/unauthorized",
+  "/share(.*)",
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
+export const proxy = clerkMiddleware(async (auth, req) => {
   // Let public routes through without any checks
   if (isPublicRoute(req)) return NextResponse.next();
 

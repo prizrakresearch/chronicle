@@ -167,7 +167,7 @@ interface LinksListProps {
 }
 
 export function LinksList({ projectId }: LinksListProps) {
-  const { getLinks, getProjectFiles, addProjectFile } = useProjects();
+  const { getLinks, getProjectFiles, uploadFile } = useProjects();
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [dragOver,    setDragOver]    = useState(false);
   const [uploading,   setUploading]   = useState(false);
@@ -183,23 +183,13 @@ export function LinksList({ projectId }: LinksListProps) {
     const arr = Array.from(fileList);
     if (!arr.length) return;
     setUploading(true);
-    await Promise.all(arr.map(async (f) => {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const r = new FileReader();
-        r.onload  = (e) => resolve(e.target?.result as string);
-        r.onerror = reject;
-        r.readAsDataURL(f);
-      });
-      addProjectFile({
-        projectId,
-        name:      f.name,
-        mimeType:  f.type || "application/octet-stream",
-        size:      f.size,
-        dataUrl,
-        createdAt: new Date().toISOString(),
-      });
-    }));
-    setUploading(false);
+    try {
+      await Promise.all(arr.map((f) => uploadFile(f, projectId)));
+    } catch (err) {
+      console.error("[links-list] upload failed:", err);
+    } finally {
+      setUploading(false);
+    }
   }
 
   function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { GitBranch, User, Calendar, HardDrive, FileText, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Project, ProjectFile, ProjectLink } from "@/types";
+import { getRepoBranches, getRepoContributions, type RepoBranch } from "@/lib/db/github";
 
-// ── Seeded random ─────────────────────────────────────────────────────────────
+// ── Seeded random (fallback when no GitHub repo connected) ────────────────────
 
 function mkRand(seed: number) {
   let s = (seed >>> 0) || 1;
@@ -15,7 +16,7 @@ function mkRand(seed: number) {
     return (s >>> 0) / 0xffffffff;
   };
 }
-function seed(id: string) {
+function seedNum(id: string) {
   return id.split("").reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 0);
 }
 
@@ -31,20 +32,18 @@ function fmtDate(d: Date) {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-// ── Branch generator ──────────────────────────────────────────────────────────
+// ── Mock generators (used when no real GitHub repo is linked) ─────────────────
 
-export function genBranches(project: Project): { name: string; isDefault: boolean }[] {
+export function genBranches(project: Project): RepoBranch[] {
   const def  = project.githubRepo?.defaultBranch ?? "main";
   const pool = ["develop", "feature/auth", "feature/dashboard", "fix/header", "fix/mobile", "release/v1.0", "chore/deps"];
-  const rand = mkRand(seed(project.id) + 2);
+  const rand = mkRand(seedNum(project.id) + 2);
   const extra = pool.filter(() => rand() > 0.55).slice(0, 4);
   return [def, ...extra].map((name, i) => ({ name, isDefault: i === 0 }));
 }
 
-// ── Contribution graph generator ──────────────────────────────────────────────
-
 export function genContribs(project: Project): { date: string; count: number }[] {
-  const rand  = mkRand(seed(project.id));
+  const rand  = mkRand(seedNum(project.id));
   const today = new Date();
   return Array.from({ length: 60 }, (_, i) => {
     const d = new Date(today);
@@ -75,9 +74,10 @@ const INTENSITY = [
   "bg-primary/85",
 ] as const;
 
-function ContribGraph({ project }: { project: Project }) {
-  const contribs = useMemo(() => genContribs(project), [project.id]);
-
+function ContribGraph({ contribs, loading }: {
+  contribs: { date: string; count: number }[];
+  loading?: boolean;
+}) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const startDate = new Date(today); startDate.setDate(today.getDate() - 59);
   const padDays = (startDate.getDay() + 6) % 7;
@@ -98,10 +98,8 @@ function ContribGraph({ project }: { project: Project }) {
       <p className="text-[10px] font-semibold text-white/25 uppercase tracking-widest mb-2.5">
         Git activity · 60 days
       </p>
-      {/* Flat CSS grid: columns = weeks (1fr each), rows = days of week (7).
-          gridAutoFlow column fills week-by-week. aspect-square keeps cells square. */}
       <div
-        className="w-full grid gap-[3px]"
+        className={cn("w-full grid gap-[3px] transition-opacity duration-300", loading && "opacity-40")}
         style={{
           gridTemplateColumns: `repeat(${numWeeks}, 1fr)`,
           gridTemplateRows: "repeat(7, auto)",
@@ -136,10 +134,60 @@ interface GitSidebarProps {
   links:          ProjectLink[];
   selectedBranch: string;
   onBranchChange: (b: string) => void;
+  /** Pre-fetched branches — skips the in-component fetch if provided. */
+  initialBranches?: RepoBranch[];
+  /** Pre-fetched contribution data — skips the in-component fetch if provided. */
+  initialContribs?: { date: string; count: number }[];
 }
 
-export function GitSidebar({ project, files, links, selectedBranch, onBranchChange }: GitSidebarProps) {
-  const branches  = useMemo(() => genBranches(project), [project.id]);
+export function GitSidebar({ project, files, links, selectedBranch, onBranchChange, initialBranches, initialContribs }: GitSidebarProps) {
+  const hasRepo = !!project.githubRepo;
+
+  // Real data state (only populated when repo is connected)
+  const [realBranches, setRealBranches] = useState<RepoBranch[] | null>(initialBranches ?? null);
+  const [realContribs, setRealContribs] = useState<{ date: string; count: number }[] | null>(initialContribs ?? null);
+  const [loadingData,  setLoadingData]  = useState(false);
+
+  // Fetch real data when a repo is linked (skip if pre-loaded)
+  useEffect(() => {
+    if (!project.githubRepo) {
+      setRealBranches(null);
+      setRealContribs(null);
+      return;
+    }
+    // If we already have pre-fetched data, use it and skip the network call
+    if (initialBranches && initialContribs) {
+      setRealBranches(initialBranches);
+      setRealContribs(initialContribs);
+      return;
+    }
+    const { fullName, defaultBranch } = project.githubRepo;
+    setLoadingData(true);
+
+    Promise.all([
+      getRepoBranches(fullName, defaultBranch),
+      getRepoContributions(fullName),
+    ])
+      .then(([branches, contribs]) => {
+        setRealBranches(branches);
+        setRealContribs(contribs);
+        // If the currently selected branch doesn't exist in real branches, switch to default
+        const names = new Set(branches.map(b => b.name));
+        if (!names.has(selectedBranch)) {
+          const def = branches.find(b => b.isDefault);
+          if (def) onBranchChange(def.name);
+        }
+      })
+      .catch(err => {
+        console.warn("[GitSidebar] failed to fetch GitHub data:", err);
+        // Fall through to mock data silently
+      })
+      .finally(() => setLoadingData(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.githubRepo?.fullName]);
+
+  const branches  = realBranches ?? genBranches(project);
+  const contribs  = realContribs ?? genContribs(project);
   const totalSize = files.reduce((a, f) => a + f.size, 0);
   const author    = project.githubRepo?.fullName.split("/")[0] ?? "you";
 
@@ -158,6 +206,24 @@ export function GitSidebar({ project, files, links, selectedBranch, onBranchChan
           <MetaRow icon={Link2}     label="Links"    value={String(links.length)} />
         </div>
       </div>
+
+      {/* GitHub repo link (if connected) */}
+      {project.githubRepo && (
+        <div>
+          <p className="text-[10px] font-semibold text-white/25 uppercase tracking-widest mb-2">Repo</p>
+          <a
+            href={`https://github.com/${project.githubRepo.fullName}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/[0.05] bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04] transition duration-150 group"
+          >
+            <GitBranch className="h-3 w-3 text-white/25 shrink-0 group-hover:text-white/50" />
+            <span className="text-[11px] text-white/45 truncate group-hover:text-white/70">
+              {project.githubRepo.fullName}
+            </span>
+          </a>
+        </div>
+      )}
 
       {/* Branches */}
       <div>
@@ -185,7 +251,7 @@ export function GitSidebar({ project, files, links, selectedBranch, onBranchChan
       </div>
 
       {/* Contribution graph */}
-      <ContribGraph project={project} />
+      <ContribGraph contribs={contribs} loading={loadingData} />
 
       {/* Bottom spacer — prevents content from hiding behind the fixed bottom blur */}
       <div className="shrink-0 h-16" />

@@ -1,0 +1,184 @@
+"use server";
+
+import { auth } from "@clerk/nextjs/server";
+import { db } from "@/lib/supabase/server";
+import { getDownloadUrl } from "@/lib/s3/client";
+import { revalidatePath } from "next/cache";
+import type { ProjectStatus } from "@/lib/supabase/types";
+
+/** Replace logo_url with a fresh presigned URL for any row that has logo_s3_key. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolveLogoUrls<T extends { logo_s3_key?: string | null; logo_url?: string | null }>(rows: T[]): Promise<T[]> {
+  return Promise.all(rows.map(async (row) => {
+    if (!row.logo_s3_key) return row;
+    try {
+      const url = await getDownloadUrl(row.logo_s3_key, 3600);
+      return { ...row, logo_url: url };
+    } catch {
+      return row;
+    }
+  }));
+}
+
+// ── Auth helper ───────────────────────────────────────────────────────────────
+
+async function requireOwner() {
+  const { userId, sessionClaims } = await auth();
+  if (!userId) throw new Error("Unauthenticated");
+  const meta = (sessionClaims?.metadata ?? {}) as { role?: string };
+  if (meta.role !== "owner") throw new Error("Forbidden");
+  return userId;
+}
+
+async function requireAuth() {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthenticated");
+  return userId;
+}
+
+// ── Queries ───────────────────────────────────────────────────────────────────
+
+/**
+ * Fetch all projects the current user is allowed to see.
+ *   Owner  → all projects
+ *   Guest  → only projects in project_shares for their Clerk ID
+ */
+export async function getProjects() {
+  const { userId, sessionClaims } = await auth();
+  if (!userId) throw new Error("Unauthenticated");
+
+  const meta     = (sessionClaims?.metadata ?? {}) as { role?: string };
+  const isOwner  = meta.role === "owner";
+
+  const FULL_SELECT = `
+    *,
+    github_repos (*),
+    calendar_events (*),
+    project_notes (*),
+    markdown_notes (*),
+    credentials (*, credential_pairs (*)),
+    roadmap_items (*),
+    timeline_events (*),
+    project_links (*)
+  `;
+
+  if (isOwner) {
+    const { data, error } = await db
+      .from("projects")
+      .select(FULL_SELECT)
+      .order("updated_at", { ascending: false });
+
+    if (error) throw error;
+    return resolveLogoUrls(data ?? []);
+  }
+
+  // Guest — only shared projects
+  const { data: shares, error: shareErr } = await db
+    .from("project_shares")
+    .select("project_id")
+    .eq("clerk_user_id", userId);
+
+  if (shareErr) throw shareErr;
+  const ids = (shares ?? []).map((s) => s.project_id);
+  if (ids.length === 0) return [];
+
+  const { data, error } = await db
+    .from("projects")
+    .select(FULL_SELECT)
+    .in("id", ids)
+    .order("updated_at", { ascending: false });
+
+  if (error) throw error;
+  return resolveLogoUrls(data ?? []);
+}
+
+export async function getProject(id: string) {
+  const userId = await requireAuth();
+  const { data, error } = await db
+    .from("projects")
+    .select(`
+      *,
+      github_repos (*),
+      calendar_events (*),
+      project_notes (*),
+      markdown_notes (*),
+      credentials (*, credential_pairs (*)),
+      roadmap_items (*),
+      timeline_events (*),
+      project_links (*)
+    `)
+    .eq("id", id)
+    .single();
+
+  if (error) throw error;
+  const [resolved] = await resolveLogoUrls([data]);
+  return resolved;
+}
+
+// ── Mutations (owner only) ────────────────────────────────────────────────────
+
+export async function createProject(input: {
+  id?: string;
+  name: string;
+  description: string | null;
+  status: ProjectStatus;
+  logo_url?: string | null;
+}) {
+  const ownerId = await requireOwner();
+  const { data, error } = await db
+    .from("projects")
+    .insert({ ...input, owner_id: ownerId })
+    .select()
+    .single();
+
+  if (error) throw error;
+  revalidatePath("/");
+  return data;
+}
+
+export async function updateProject(
+  id: string,
+  updates: Partial<{
+    name: string;
+    brief: string | null;
+    description: string | null;
+    problem_statement: string | null;
+    status: ProjectStatus;
+    logo_url: string | null;
+    pinned: boolean;
+    hidden: boolean;
+  }>
+) {
+  await requireOwner();
+  const { error } = await db.from("projects").update(updates).eq("id", id);
+  if (error) throw error;
+  revalidatePath("/");
+  revalidatePath(`/projects/${id}`);
+}
+
+export async function deleteProject(id: string) {
+  await requireOwner();
+  const { error } = await db.from("projects").delete().eq("id", id);
+  if (error) throw error;
+  revalidatePath("/");
+}
+
+// ── Guest visibility ──────────────────────────────────────────────────────────
+
+export async function shareProject(projectId: string, guestClerkId: string) {
+  await requireOwner();
+  const { error } = await db
+    .from("project_shares")
+    .insert({ project_id: projectId, clerk_user_id: guestClerkId });
+  if (error && error.code !== "23505") throw error; // ignore duplicate
+}
+
+export async function unshareProject(projectId: string, guestClerkId: string) {
+  await requireOwner();
+  const { error } = await db
+    .from("project_shares")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("clerk_user_id", guestClerkId);
+  if (error) throw error;
+}

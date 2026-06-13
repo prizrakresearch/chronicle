@@ -14,6 +14,7 @@ import { PinDialog } from "./pin-dialog";
 import { CalendarPanel } from "@/components/dashboard/calendar-panel";
 import { NotesPanel } from "@/components/dashboard/notes-panel";
 import { useProjects } from "@/lib/store/projects-context";
+import { UserBadge } from "@/components/layout/user-badge";
 import { cn } from "@/lib/utils";
 import type { ProjectStatus } from "@/types";
 
@@ -25,11 +26,10 @@ const STATUS_FILTERS: { label: string; value: ProjectStatus | "all"; icon: React
 ];
 
 export function ProjectGrid() {
-  const { projects, pin, setPin, isReadOnly } = useProjects();
+  const { projects, loading, pin, setPin, isReadOnly } = useProjects();
   const [search,       setSearch]       = useState("");
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | "all">("all");
   const [createOpen,   setCreateOpen]   = useState(false);
-  const [loading] = useState(false);
 
   // Hidden-projects reveal state
   const [hiddenVisible, setHiddenVisible] = useState(false);
@@ -160,16 +160,19 @@ export function ProjectGrid() {
       {/* Full-width topbar */}
       <div className="shrink-0 py-5 px-6 flex items-center justify-between z-20">
         <h1 className="text-sm font-semibold text-white/80">Chronicle</h1>
-        {!isReadOnly && (
-          <Button
-            onClick={() => setCreateOpen(true)}
-            size="sm"
-            className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 gap-2 transition duration-200 ease-in-out"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New project
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {!isReadOnly && (
+            <Button
+              onClick={() => setCreateOpen(true)}
+              size="sm"
+              className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 gap-2 transition duration-200 ease-in-out"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New project
+            </Button>
+          )}
+          <UserBadge />
+        </div>
       </div>
 
       {/* 70 / 30 split */}

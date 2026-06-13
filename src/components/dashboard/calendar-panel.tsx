@@ -1,8 +1,13 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  getDashboardData,
+  saveDashboardEvents,
+  type DashboardEvent,
+} from "@/lib/db/dashboard";
 
 const DAY_LABELS  = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const MONTH_NAMES = [
@@ -10,7 +15,7 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-type CalEvent = { id: string; date: string; title: string };
+type CalEvent = DashboardEvent;
 
 function toIso(d: Date) {
   return [
@@ -23,8 +28,7 @@ function toIso(d: Date) {
 function fmtShort(iso: string) {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
+    day: "numeric", month: "short",
   });
 }
 
@@ -38,10 +42,15 @@ export function CalendarPanel() {
   const [draft,    setDraft]    = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Load persisted events on mount
+  useEffect(() => {
+    getDashboardData().then(({ events }) => setEvents(events)).catch(console.error);
+  }, []);
+
   const { offset, daysInMonth } = useMemo(() => {
-    const firstDow = new Date(year, month, 1).getDay(); // 0 = Sun
+    const firstDow = new Date(year, month, 1).getDay();
     return {
-      offset:      (firstDow + 6) % 7,                  // Mon-based
+      offset:      (firstDow + 6) % 7,
       daysInMonth: new Date(year, month + 1, 0).getDate(),
     };
   }, [year, month]);
@@ -53,10 +62,7 @@ export function CalendarPanel() {
   }, [events]);
 
   const upcoming = useMemo(
-    () =>
-      [...events]
-        .filter((e) => e.date >= todayIso)
-        .sort((a, b) => a.date.localeCompare(b.date)),
+    () => [...events].filter((e) => e.date >= todayIso).sort((a, b) => a.date.localeCompare(b.date)),
     [events, todayIso],
   );
 
@@ -78,11 +84,16 @@ export function CalendarPanel() {
   const addEvent = () => {
     const title = draft.trim();
     if (!selected || !title) return;
-    setEvents((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), date: selected, title },
-    ]);
+    const next = [...events, { id: crypto.randomUUID(), date: selected, title }];
+    setEvents(next);
     setDraft("");
+    saveDashboardEvents(next).catch(console.error);
+  };
+
+  const deleteEvent = (id: string) => {
+    const next = events.filter((e) => e.id !== id);
+    setEvents(next);
+    saveDashboardEvents(next).catch(console.error);
   };
 
   return (
@@ -94,18 +105,10 @@ export function CalendarPanel() {
           {MONTH_NAMES[month]} {year}
         </span>
         <div className="flex items-center gap-0.5">
-          <button
-            onClick={prevMonth}
-            className="w-6 h-6 flex items-center justify-center rounded-full text-white/35
-                       hover:text-white/80 hover:bg-white/8 transition duration-200 ease-in-out"
-          >
+          <button onClick={prevMonth} className="w-6 h-6 flex items-center justify-center rounded-full text-white/35 hover:text-white/80 hover:bg-white/8 transition duration-200 ease-in-out">
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>
-          <button
-            onClick={nextMonth}
-            className="w-6 h-6 flex items-center justify-center rounded-full text-white/35
-                       hover:text-white/80 hover:bg-white/8 transition duration-200 ease-in-out"
-          >
+          <button onClick={nextMonth} className="w-6 h-6 flex items-center justify-center rounded-full text-white/35 hover:text-white/80 hover:bg-white/8 transition duration-200 ease-in-out">
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -114,13 +117,7 @@ export function CalendarPanel() {
       {/* ── Day-of-week headers ── */}
       <div className="grid grid-cols-7 shrink-0 mb-1">
         {DAY_LABELS.map((d, i) => (
-          <div
-            key={d}
-            className={cn(
-              "text-center text-[10px] font-medium pb-1",
-              i >= 5 ? "text-violet-400/40" : "text-white/20",
-            )}
-          >
+          <div key={d} className={cn("text-center text-[10px] font-medium pb-1", i >= 5 ? "text-violet-400/40" : "text-white/20")}>
             {d}
           </div>
         ))}
@@ -135,7 +132,6 @@ export function CalendarPanel() {
           const isToday   = iso === todayIso;
           const isSel     = iso === selected;
           const hasEvents = Boolean(eventsByDate[iso]?.length);
-          // Mon-based: 0=Mon … 4=Fri, 5=Sat, 6=Sun
           const dow       = (offset + i) % 7;
           const isWeekend = dow >= 5;
 
@@ -170,17 +166,12 @@ export function CalendarPanel() {
           onKeyDown={(e) => e.key === "Enter" && addEvent()}
           placeholder={selected ? `Event on ${fmtShort(selected)}…` : "Select a date…"}
           disabled={!selected}
-          className="flex-1 h-8 px-3 rounded-full text-xs
-                     bg-white/5 border border-white/8 text-white/80 placeholder:text-white/20
-                     focus:outline-none focus:border-primary/40 disabled:opacity-40
-                     transition duration-200 ease-in-out"
+          className="flex-1 h-8 px-3 rounded-full text-xs bg-white/5 border border-white/8 text-white/80 placeholder:text-white/20 focus:outline-none focus:border-primary/40 disabled:opacity-40 transition duration-200 ease-in-out"
         />
         <button
           onClick={addEvent}
           disabled={!selected || !draft.trim()}
-          className="w-8 h-8 flex items-center justify-center rounded-full
-                     bg-primary/70 text-black hover:bg-primary/90
-                     disabled:opacity-30 transition duration-200 ease-in-out shrink-0"
+          className="w-8 h-8 flex items-center justify-center rounded-full bg-primary/70 text-black hover:bg-primary/90 disabled:opacity-30 transition duration-200 ease-in-out shrink-0"
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
@@ -192,19 +183,14 @@ export function CalendarPanel() {
           <p className="text-[11px] text-white/20 text-center py-2">No upcoming events</p>
         ) : (
           upcoming.map((ev) => (
-            <div
-              key={ev.id}
-              className="group flex items-start gap-2.5 px-2.5 py-2 rounded-xl
-                         bg-white/[0.03] hover:bg-white/[0.06] transition duration-200 ease-in-out"
-            >
+            <div key={ev.id} className="group flex items-start gap-2.5 px-2.5 py-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] transition duration-200 ease-in-out">
               <span className="shrink-0 text-[10px] font-medium text-primary/55 mt-px whitespace-nowrap">
                 {fmtShort(ev.date)}
               </span>
               <span className="flex-1 text-[11px] text-white/65 leading-snug">{ev.title}</span>
               <button
-                onClick={() => setEvents((prev) => prev.filter((e) => e.id !== ev.id))}
-                className="opacity-0 group-hover:opacity-100 shrink-0 text-white/25
-                           hover:text-white/65 transition duration-200 ease-in-out"
+                onClick={() => deleteEvent(ev.id)}
+                className="opacity-0 group-hover:opacity-100 shrink-0 text-white/25 hover:text-white/65 transition duration-200 ease-in-out"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -212,7 +198,6 @@ export function CalendarPanel() {
           ))
         )}
       </div>
-
     </div>
   );
 }

@@ -1,16 +1,18 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft, Plus, LayoutGrid, GitBranch, Paperclip, Link2, Share2, Download, NotebookPen,
   Rocket, Globe, Terminal, Database, Layers, Cpu,
   Compass, Flame, Code2, Boxes, Radio, Wand2, Satellite, FlaskConical, Binary,
+  Pencil, X, ImageIcon, Upload, Loader2, Check,
 } from "lucide-react";
 import Link from "next/link";
-import { UserButton } from "@clerk/nextjs";
+import { UserBadge } from "@/components/layout/user-badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getAvatarColor } from "@/components/projects/project-card";
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
 import { OverviewPanel } from "@/components/overview/overview-panel";
@@ -18,6 +20,7 @@ import { RoadmapBoard } from "@/components/roadmap/roadmap-board";
 import { FilesView } from "@/components/files/files-view";
 import { NotesView } from "@/components/notes/notes-view";
 import { useProjects } from "@/lib/store/projects-context";
+import { requestLogoUploadUrl, saveProjectLogoKey } from "@/lib/db/files";
 import { cn } from "@/lib/utils";
 import type { ProjectStatus } from "@/types";
 
@@ -31,15 +34,208 @@ function getProjectIcon(name: string) {
   return PLACEHOLDER_ICONS[idx];
 }
 
-function TopbarAvatar({ name, logoUrl }: { name: string; logoUrl: string | null }) {
-  if (logoUrl) {
-    return <img src={logoUrl} alt={name} className="w-9 h-9 rounded-full object-cover shrink-0" />;
+// ── Editable avatar with logo picker ─────────────────────────────────────────
+function TopbarAvatar({
+  name, logoUrl, projectId, isReadOnly, onSave,
+}: {
+  name: string;
+  logoUrl: string | null;
+  projectId: string;
+  isReadOnly: boolean;
+  onSave: (url: string | null) => void;
+}) {
+  const [open,       setOpen]       = useState(false);
+  const [draft,      setDraft]      = useState(logoUrl ?? "");
+  const [imgErr,     setImgErr]     = useState(false);
+  const [uploading,  setUploading]  = useState(false);
+  const [uploadErr,  setUploadErr]  = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleOpen(o: boolean) {
+    if (o) { setDraft(logoUrl ?? ""); setUploadErr(null); }
+    setImgErr(false);
+    setOpen(o);
   }
-  const Icon = getProjectIcon(name);
+
+  function handleSaveUrl() {
+    const trimmed = draft.trim();
+    onSave(trimmed || null);
+    setOpen(false);
+  }
+
+  function handleRemove() {
+    onSave(null);
+    setOpen(false);
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset so the same file can be picked again
+    e.target.value = "";
+    setUploading(true);
+    setUploadErr(null);
+    try {
+      // 1. Get presigned PUT URL from server
+      const { uploadUrl, s3Key } = await requestLogoUploadUrl(projectId, file.name, file.type);
+      // 2. Upload bytes directly to S3
+      const putRes = await fetch(uploadUrl, {
+        method:  "PUT",
+        body:    file,
+        headers: { "Content-Type": file.type },
+      });
+      if (!putRes.ok) throw new Error(`S3 upload failed (${putRes.status})`);
+      // 3. Save key server-side, get fresh presigned GET URL back
+      const freshUrl = await saveProjectLogoKey(projectId, s3Key);
+      // 4. Update parent state
+      onSave(freshUrl);
+      setOpen(false);
+    } catch (err) {
+      setUploadErr(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  // Avatar rendering
+  const showImg = logoUrl && !imgErr;
+  const AvatarNode = showImg ? (
+    <img
+      src={logoUrl}
+      alt={name}
+      onError={() => setImgErr(true)}
+      className="w-9 h-9 rounded-full object-cover shrink-0"
+    />
+  ) : (() => {
+    const Icon = getProjectIcon(name);
+    return (
+      <div className={cn("w-9 h-9 rounded-full flex items-center justify-center shrink-0 select-none", getAvatarColor(name))}>
+        <Icon className="h-4 w-4" />
+      </div>
+    );
+  })();
+
+  // Preview in popover (tracks draft URL while typing)
+  const PreviewNode = draft.trim() ? (
+    <img
+      src={draft.trim()}
+      alt="preview"
+      className="w-10 h-10 rounded-full object-cover border border-white/10 shrink-0"
+      onError={() => {}}
+    />
+  ) : (() => {
+    const Icon = getProjectIcon(name);
+    return (
+      <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", getAvatarColor(name))}>
+        <Icon className="h-4 w-4" />
+      </div>
+    );
+  })();
+
+  if (isReadOnly) return AvatarNode;
+
   return (
-    <div className={cn("w-9 h-9 rounded-full flex items-center justify-center shrink-0 select-none", getAvatarColor(name))}>
-      <Icon className="h-4 w-4" />
-    </div>
+    <Popover open={open} onOpenChange={handleOpen}>
+      <PopoverTrigger
+        render={
+          <button className="relative group shrink-0 focus:outline-none">
+            {AvatarNode}
+            <span className="absolute inset-0 rounded-full bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+              <Pencil className="h-3 w-3 text-white/80" />
+            </span>
+          </button>
+        }
+      />
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
+      <PopoverContent
+        side="bottom"
+        align="start"
+        className="w-72 p-3 rounded-2xl bg-zinc-950 border border-white/10 shadow-xl"
+      >
+        <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest mb-3">
+          Project icon
+        </p>
+
+        {/* Preview row */}
+        <div className="flex items-center gap-3 mb-3">
+          {PreviewNode}
+          <p className="text-xs text-zinc-500 leading-relaxed flex-1">
+            Upload an image or paste a URL. Square images look best.
+          </p>
+        </div>
+
+        {/* Upload button */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="w-full h-9 mb-2 flex items-center justify-center gap-2 text-xs font-medium rounded-xl border border-dashed border-white/15 text-zinc-400 hover:border-white/30 hover:text-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {uploading ? (
+            <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…</>
+          ) : (
+            <><Upload className="h-3.5 w-3.5" /> Upload image</>
+          )}
+        </button>
+
+        {uploadErr && (
+          <p className="text-[11px] text-red-400 mb-2">{uploadErr}</p>
+        )}
+
+        {/* Divider */}
+        <div className="flex items-center gap-2 mb-2">
+          <div className="flex-1 h-px bg-white/[0.06]" />
+          <span className="text-[10px] text-zinc-600 uppercase tracking-wider">or paste URL</span>
+          <div className="flex-1 h-px bg-white/[0.06]" />
+        </div>
+
+        {/* URL input */}
+        <div className="relative mb-2">
+          <ImageIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-600 pointer-events-none" />
+          <input
+            type="url"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSaveUrl(); if (e.key === "Escape") setOpen(false); }}
+            placeholder="https://…"
+            className="w-full pl-8 pr-3 py-2 text-xs rounded-xl bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition-colors"
+          />
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSaveUrl}
+            disabled={uploading}
+            className="flex-1 h-8 text-xs font-semibold rounded-xl bg-zinc-100 text-zinc-900 hover:bg-white transition-colors disabled:opacity-40"
+          >
+            Save URL
+          </button>
+          {logoUrl && (
+            <button
+              onClick={handleRemove}
+              className="h-8 px-3 text-xs font-medium rounded-xl text-zinc-500 hover:text-red-400 border border-white/10 hover:border-red-400/30 transition-colors flex items-center gap-1"
+            >
+              <X className="h-3 w-3" /> Remove
+            </button>
+          )}
+          <button
+            onClick={() => setOpen(false)}
+            className="h-8 px-3 text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -62,8 +258,54 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     (searchParams.get("tab") as TabValue) ?? "overview"
   );
   const [createOpen, setCreateOpen] = useState(false);
+  const [copied,     setCopied]     = useState(false);
+  const [sharedCopied, setSharedCopied] = useState(false);
+
+  function handleShare() {
+    const url = `${window.location.origin}/share/${id}`;
+    navigator.clipboard.writeText(url);
+    setSharedCopied(true);
+    setTimeout(() => setSharedCopied(false), 2000);
+  }
+
+  function handleCopyLink() {
+    if (!project?.githubRepo) return;
+    navigator.clipboard.writeText(`https://github.com/${project.githubRepo.fullName}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  function handleDownload() {
+    if (!project?.githubRepo) return;
+    const { fullName, defaultBranch } = project.githubRepo;
+    window.open(
+      `https://github.com/${fullName}/archive/refs/heads/${defaultBranch}.zip`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
 
   const project = getProject(id);
+
+  // Inline name editing
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft,   setNameDraft]   = useState("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  function startEditName() {
+    if (!project || isReadOnly) return;
+    setNameDraft(project.name);
+    setEditingName(true);
+    setTimeout(() => nameInputRef.current?.select(), 0);
+  }
+
+  function commitName() {
+    const trimmed = nameDraft.trim();
+    if (trimmed && project && trimmed !== project.name) {
+      updateProject(project.id, { name: trimmed });
+    }
+    setEditingName(false);
+  }
 
   // Dynamic tab title: "Chronicle - Project Name"
   useEffect(() => {
@@ -101,9 +343,43 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           </Link>
 
           {/* Project identity pill */}
-          <div className="flex items-center gap-6 pl-1 pr-6 h-11 rounded-full border border-white/10 bg-transparent shrink-0">
-            <TopbarAvatar name={project.name} logoUrl={project.logoUrl} />
-            <h1 className="text-sm font-semibold text-white">{project.name}</h1>
+          <div className="flex items-center gap-3 pl-1 pr-5 h-11 rounded-full border border-white/10 bg-transparent shrink-0">
+            <TopbarAvatar
+              name={project.name}
+              logoUrl={project.logoUrl}
+              projectId={project.id}
+              isReadOnly={isReadOnly}
+              onSave={(url) => updateProject(project.id, { logoUrl: url })}
+            />
+
+            {/* Editable name */}
+            {editingName && !isReadOnly ? (
+              <input
+                ref={nameInputRef}
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onBlur={commitName}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter")  { e.currentTarget.blur(); }
+                  if (e.key === "Escape") { setEditingName(false); }
+                }}
+                autoFocus
+                className="text-sm font-semibold text-white bg-transparent border-b border-white/30 outline-none w-40 focus:border-white/60 transition-colors"
+              />
+            ) : (
+              <h1
+                onClick={startEditName}
+                title={!isReadOnly ? "Click to rename" : undefined}
+                className={cn(
+                  "text-sm font-semibold text-white whitespace-nowrap",
+                  !isReadOnly && "cursor-text hover:text-white/80 transition-colors"
+                )}
+              >
+                {project.name}
+              </h1>
+            )}
+
+            <span className="text-xs text-white/30">·</span>
             <span className="text-xs text-white/45 capitalize">{project.status}</span>
           </div>
         </div>
@@ -113,7 +389,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           <span className="text-sm font-semibold text-white/80">Chronicle</span>
         </div>
 
-        {/* Right: New project (owner) + UserButton */}
+        {/* Right: New project (owner) + UserBadge */}
         <div className="flex items-center gap-2 shrink-0">
           {!isReadOnly && (
             <Button
@@ -125,17 +401,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               New project
             </Button>
           )}
-          <UserButton
-            appearance={{
-              elements: {
-                avatarBox: "w-9 h-9",
-                userButtonPopoverCard: "bg-black border border-white/10",
-                userButtonPopoverActionButton: "text-white/70 hover:text-white hover:bg-white/[0.06]",
-                userButtonPopoverActionButtonText: "text-white/70",
-                userButtonPopoverFooter: "hidden",
-              },
-            }}
-          />
+          <UserBadge />
         </div>
       </div>
 
@@ -205,22 +471,40 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           </Select>
         )}
 
-        {/* Right: Action buttons — violet complement, same shape as New project */}
+        {/* Right: Action buttons */}
         <div className="flex items-center gap-2 flex-1 justify-end">
-          {[
-            { label: "Copy link", icon: <Link2    className="h-3.5 w-3.5" />, onClick: () => { if (project.githubRepo) navigator.clipboard.writeText(`https://github.com/${project.githubRepo.fullName}`); } },
-            { label: "Share",     icon: <Share2   className="h-3.5 w-3.5" />, onClick: () => navigator.share?.({ title: project.name, url: window.location.href }) },
-            { label: "Download",  icon: <Download className="h-3.5 w-3.5" />, onClick: () => {} },
-          ].map((btn) => (
-            <button
-              key={btn.label}
-              onClick={btn.onClick}
-              className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-violet-400/75 border border-violet-400/75 hover:bg-violet-400/10 hover:-translate-y-px active:translate-y-0 flex items-center gap-2 transition duration-200 ease-in-out"
-            >
-              {btn.icon}
-              {btn.label}
-            </button>
-          ))}
+
+          {/* Copy repo link */}
+          <button
+            onClick={handleCopyLink}
+            disabled={!project.githubRepo}
+            title={!project.githubRepo ? "No GitHub repo linked" : `Copy link to ${project.githubRepo.fullName}`}
+            className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent border flex items-center gap-2 transition duration-200 ease-in-out hover:-translate-y-px active:translate-y-0 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:translate-y-0 text-violet-400/75 border-violet-400/75 hover:bg-violet-400/10"
+          >
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
+            {copied ? "Copied!" : "Copy link"}
+          </button>
+
+          {/* Share — copies the public /share/[id] URL */}
+          <button
+            onClick={handleShare}
+            className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-violet-400/75 border border-violet-400/75 hover:bg-violet-400/10 hover:-translate-y-px active:translate-y-0 flex items-center gap-2 transition duration-200 ease-in-out"
+          >
+            {sharedCopied ? <Check className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
+            {sharedCopied ? "Link copied!" : "Share"}
+          </button>
+
+          {/* Download repo ZIP */}
+          <button
+            onClick={handleDownload}
+            disabled={!project.githubRepo}
+            title={!project.githubRepo ? "No GitHub repo linked" : `Download ${project.githubRepo.defaultBranch}.zip`}
+            className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent border flex items-center gap-2 transition duration-200 ease-in-out hover:-translate-y-px active:translate-y-0 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:translate-y-0 text-violet-400/75 border-violet-400/75 hover:bg-violet-400/10"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download
+          </button>
+
         </div>
 
       </div>

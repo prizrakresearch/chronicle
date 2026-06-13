@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { GitBranch, Star, RefreshCw, Pencil, NotebookPen } from "lucide-react";
+import { GitBranch, Star, RefreshCw, Pencil, NotebookPen, Link2Off, Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ProjectCalendarPanel } from "./project-calendar-panel";
+import { LinkRepoDialog } from "@/components/projects/link-repo-dialog";
 import { formatLastSynced } from "@/lib/utils/format";
 import { useProjects } from "@/lib/store/projects-context";
 import { cn } from "@/lib/utils";
@@ -99,6 +100,140 @@ function EditableField({
   );
 }
 
+// ── GitHub card ───────────────────────────────────────────────────────────────
+
+function GithubSection({ project }: { project: Project }) {
+  const { syncRepo, unlinkRepo, hasGithubToken, isReadOnly } = useProjects();
+  const [linkOpen,    setLinkOpen]    = useState(false);
+  const [syncing,     setSyncing]     = useState(false);
+  const [unlinking,   setUnlinking]   = useState(false);
+
+  async function handleSync() {
+    setSyncing(true);
+    try { await syncRepo(project.id); }
+    catch (err) { console.error("[GithubSection] sync failed:", err); }
+    finally { setSyncing(false); }
+  }
+
+  async function handleUnlink() {
+    setUnlinking(true);
+    try { await unlinkRepo(project.id); }
+    catch (err) { console.error("[GithubSection] unlink failed:", err); }
+    finally { setUnlinking(false); }
+  }
+
+  // ── Repo connected ────────────────────────────────────────────────────────────
+  if (project.githubRepo) {
+    const repo = project.githubRepo;
+    return (
+      <div>
+        <SectionLabel>GitHub</SectionLabel>
+        <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4">
+          {/* Repo name + stars */}
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <a
+              href={`https://github.com/${repo.fullName}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm font-semibold text-white/80 hover:text-white transition-colors group"
+            >
+              <GitBranch className="h-4 w-4 text-white/30 group-hover:text-white/50 shrink-0" />
+              <span className="truncate">{repo.fullName}</span>
+            </a>
+            <span className="flex items-center gap-1 text-xs text-white/30 shrink-0">
+              <Star className="h-3 w-3" />
+              {repo.stars.toLocaleString()}
+            </span>
+          </div>
+
+          {/* Description */}
+          {repo.description && (
+            <p className="text-xs text-white/35 mb-3 leading-relaxed">
+              {repo.description}
+            </p>
+          )}
+
+          {/* Branch pill */}
+          <div className="flex items-center gap-1.5 mb-3">
+            <GitBranch className="h-3 w-3 text-white/20" />
+            <span className="text-[11px] font-mono text-white/35">{repo.defaultBranch}</span>
+          </div>
+
+          {/* Footer: last synced + actions */}
+          <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
+            <span className="text-[11px] text-white/20">
+              {formatLastSynced(repo.lastSyncedAt)}
+            </span>
+            {!isReadOnly && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleUnlink}
+                  disabled={unlinking}
+                  className="flex items-center gap-1 text-[11px] text-white/20 hover:text-red-400/70 transition-colors disabled:opacity-40"
+                >
+                  {unlinking
+                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                    : <Link2Off className="h-3 w-3" />}
+                  {unlinking ? "Removing…" : "Disconnect"}
+                </button>
+                <span className="text-white/10">·</span>
+                <button
+                  onClick={handleSync}
+                  disabled={syncing}
+                  className="flex items-center gap-1 text-[11px] text-white/30 hover:text-white/60 transition-colors disabled:opacity-40"
+                >
+                  <RefreshCw className={cn("h-3 w-3", syncing && "animate-spin")} />
+                  {syncing ? "Syncing…" : "Sync now"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── No repo linked ─────────────────────────────────────────────────────────────
+  if (isReadOnly) return null;
+
+  return (
+    <div>
+      <SectionLabel>GitHub</SectionLabel>
+      <button
+        onClick={() => setLinkOpen(true)}
+        disabled={!hasGithubToken}
+        title={!hasGithubToken ? "Set up your GitHub token first (click your avatar → GitHub)" : undefined}
+        className={cn(
+          "w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border text-left transition duration-150",
+          hasGithubToken
+            ? "border-white/[0.07] bg-white/[0.02] hover:border-primary/30 hover:bg-primary/[0.04] cursor-pointer"
+            : "border-dashed border-white/[0.06] bg-transparent cursor-not-allowed opacity-40"
+        )}
+      >
+        <div className="w-8 h-8 rounded-xl bg-white/[0.05] flex items-center justify-center shrink-0">
+          <Plus className="h-4 w-4 text-white/25" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-white/50">Connect a GitHub repo</p>
+          <p className="text-xs text-white/25 mt-0.5">
+            {hasGithubToken
+              ? "Link this project to a GitHub repository"
+              : "Set up a GitHub token first (avatar → GitHub)"}
+          </p>
+        </div>
+      </button>
+
+      <LinkRepoDialog
+        projectId={project.id}
+        open={linkOpen}
+        onOpenChange={setLinkOpen}
+      />
+    </div>
+  );
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
 export function OverviewPanel({ project, onOpenNotes }: OverviewPanelProps) {
   const { updateProject, isReadOnly } = useProjects();
 
@@ -132,43 +267,7 @@ export function OverviewPanel({ project, onOpenNotes }: OverviewPanelProps) {
           isReadOnly={isReadOnly}
         />
 
-        {/* GitHub */}
-        {project.githubRepo && (
-          <div>
-            <SectionLabel>GitHub</SectionLabel>
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <a
-                  href={`https://github.com/${project.githubRepo.fullName}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm font-semibold text-zinc-100 hover:text-white transition-colors group"
-                >
-                  <GitBranch className="h-4 w-4 text-zinc-400 group-hover:text-zinc-300" />
-                  {project.githubRepo.fullName}
-                </a>
-                <span className="flex items-center gap-1 text-xs text-zinc-500">
-                  <Star className="h-3 w-3" />
-                  {project.githubRepo.stars}
-                </span>
-              </div>
-              {project.githubRepo.description && (
-                <p className="text-xs text-zinc-500 mb-3 leading-relaxed">
-                  {project.githubRepo.description}
-                </p>
-              )}
-              <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
-                <span className="text-xs text-zinc-600">
-                  {formatLastSynced(project.githubRepo.lastSyncedAt)}
-                </span>
-                <button className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
-                  <RefreshCw className="h-3 w-3" />
-                  Sync now
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <GithubSection project={project} />
 
       </div>
 

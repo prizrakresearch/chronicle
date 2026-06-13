@@ -96,3 +96,33 @@
     display: none;
   }
 }
+
+/* ── Splash reveal ─────────────────────────────────────────────────────────── */
+
+/* Keep the dashboard invisible while the splash overlay is in front. */
+html:not(.splash-revealed) .splash-reveal-target {
+  opacity: 0;
+}
+
+/* Once the overlay starts fading, run a short entrance animation on the
+   dashboard wrapper.  The cubic-bezier is an ease-out-expo: fast start,
+   silky settle — gives the "snap into place" feel without a long wind-down. */
+html.splash-revealed .splash-reveal-target {
+  /* No `forwards` — after the animation ends the element returns to its
+     natural state (opacity: 1, transform: none).  Keeping `forwards` would
+     lock in `transform: scale(1) translateY(0)` which, despite being
+     visually identical to `none`, still creates a persistent stacking
+     context that breaks backdrop-filter on every child (project rows, etc.). */
+  animation: splashReveal 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes splashReveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

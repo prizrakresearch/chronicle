@@ -100,6 +100,9 @@ export interface ProjectFile {
   name: string;
   mimeType: string;
   size: number;      // bytes
-  dataUrl: string;   // base64 data URL
+  /** Presigned S3 GET URL (or base64 for legacy in-memory files). */
+  dataUrl: string;
+  /** S3 object key — present for S3-backed files, undefined for legacy. */
+  s3Key?: string;
   createdAt: string; // ISO
 }

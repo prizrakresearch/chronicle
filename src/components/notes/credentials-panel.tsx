@@ -325,7 +325,7 @@ export function CredentialsPanel({ project }: CredentialsPanelProps) {
       updateProject(project.id, { credentials: updated });
     } else {
       const next: Credential = {
-        id:        "cred_" + crypto.randomUUID().slice(0, 8),
+        id:        crypto.randomUUID(),
         title:     data.title,
         pairs:     data.pairs,
         createdAt: now,

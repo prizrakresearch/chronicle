@@ -1,11 +1,18 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Search, SlidersHorizontal, ArrowLeft, Maximize2, Minimize2, X, GitCommitHorizontal } from "lucide-react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import {
+  Search, SlidersHorizontal, ArrowLeft, Maximize2, Minimize2, X,
+  GitCommitHorizontal, Loader2, GitBranch as GHIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/types";
+import {
+  getRepoCommits, getCommitDetail,
+  type RepoCommit, type CommitType,
+} from "@/lib/db/github";
 
-// ── Seeded random (same pattern as git-sidebar) ───────────────────────────────
+// ── Mock generator (fallback when no repo is linked) ──────────────────────────
 
 function mkRand(seed: number) {
   let s = (seed >>> 0) || 1;
@@ -15,27 +22,9 @@ function mkRand(seed: number) {
     return (s >>> 0) / 0xffffffff;
   };
 }
-function seed(id: string) {
+function seedNum(id: string) {
   return id.split("").reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 0);
 }
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-type CommitType = "feat" | "fix" | "chore" | "docs" | "refactor" | "test";
-
-interface Commit {
-  sha:     string;
-  type:    CommitType;
-  scope:   string | null;
-  msg:     string;
-  body:    string | null;
-  author:  string;
-  date:    string;
-  branch:  string;
-  files:   { path: string; additions: number; deletions: number; status: "M" | "A" | "D" }[];
-}
-
-// ── Mock generator ────────────────────────────────────────────────────────────
 
 const MSGS: Record<CommitType, string[]> = {
   feat:     ["add dashboard overview panel", "implement drag-and-drop roadmap", "add note export to PDF", "GitHub contribution graph", "pin and hide projects", "add file upload support", "multi-select notes", "project icon picker"],
@@ -55,12 +44,12 @@ const FILE_POOL = [
   "src/components/layout/dither-background.tsx", "src/lib/utils.ts",
 ];
 
-function genCommits(project: Project, branch: string): Commit[] {
-  const rand   = mkRand(seed(project.id) + branch.length * 7);
+function genCommits(project: Project, branch: string): RepoCommit[] {
+  const rand   = mkRand(seedNum(project.id) + branch.length * 7);
   const types  = Object.keys(MSGS) as CommitType[];
   const today  = new Date();
 
-  return Array.from({ length: 18 }, (_, i): Commit => {
+  return Array.from({ length: 18 }, (_, i): RepoCommit => {
     const type   = types[Math.floor(rand() * types.length)];
     const msgs   = MSGS[type];
     const msg    = msgs[Math.floor(rand() * msgs.length)];
@@ -79,7 +68,7 @@ function genCommits(project: Project, branch: string): Commit[] {
       return { path, additions, deletions, status };
     });
     return {
-      sha, type, scope, msg,
+      sha, type, scope: scope as string | null, msg,
       body: rand() > 0.65 ? `${scope ? `[${scope}] ` : ""}Reviewed and tested on dev. No breaking changes.` : null,
       author, date: d.toISOString().slice(0, 10),
       branch, files,
@@ -110,14 +99,30 @@ const TYPE_DOT: Record<CommitType, string> = {
 
 function CommitDetail({
   commit, isFullscreen, onFullscreen, onBack,
+  repoFullName,
 }: {
-  commit: Commit;
+  commit: RepoCommit;
   isFullscreen: boolean;
   onFullscreen: () => void;
   onBack: () => void;
+  repoFullName?: string;
 }) {
-  const totalAdd = commit.files.reduce((a, f) => a + f.additions, 0);
-  const totalDel = commit.files.reduce((a, f) => a + f.deletions, 0);
+  const [files,    setFiles]    = useState(commit.files);
+  const [loading,  setLoading]  = useState(false);
+
+  // If the commit has no files yet and we have a full name, fetch the detail
+  useEffect(() => {
+    if (commit.files.length > 0 || !repoFullName) return;
+    setLoading(true);
+    getCommitDetail(repoFullName, commit.sha, commit.branch)
+      .then(detail => setFiles(detail.files))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commit.sha]);
+
+  const totalAdd = files.reduce((a, f) => a + f.additions, 0);
+  const totalDel = files.reduce((a, f) => a + f.deletions, 0);
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -131,6 +136,17 @@ function CommitDetail({
           Back
         </button>
         <div className="flex-1" />
+        {repoFullName && (
+          <a
+            href={`https://github.com/${repoFullName}/commit/${commit.sha}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="h-7 px-3 rounded-full border border-white/10 text-white/30 hover:text-white/60 hover:border-white/20 flex items-center gap-1.5 text-xs transition duration-150"
+          >
+            <GHIcon className="h-3 w-3" />
+            View
+          </a>
+        )}
         <button
           onClick={onFullscreen}
           className="h-7 w-7 rounded-full border border-white/10 text-white/30 hover:text-white/60 hover:border-white/20 flex items-center justify-center transition duration-150"
@@ -158,34 +174,46 @@ function CommitDetail({
             <span className="font-mono text-white/40">{commit.sha}</span>
             <span>{commit.author}</span>
             <span>{commit.date}</span>
-            <span className="font-mono">
-              <span className="text-emerald-400/70">+{totalAdd}</span>
-              {" / "}
-              <span className="text-red-400/60">-{totalDel}</span>
-            </span>
+            {(files.length > 0) && (
+              <span className="font-mono">
+                <span className="text-emerald-400/70">+{totalAdd}</span>
+                {" / "}
+                <span className="text-red-400/60">-{totalDel}</span>
+              </span>
+            )}
           </div>
         </div>
 
         {/* Files changed */}
         <div>
           <p className="text-[10px] font-semibold text-white/25 uppercase tracking-widest mb-2">
-            Files changed · {commit.files.length}
+            Files changed
+            {loading ? " · loading…" : files.length > 0 ? ` · ${files.length}` : ""}
           </p>
-          <div className="space-y-1.5">
-            {commit.files.map((f, i) => (
-              <div key={i} className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02]">
-                <span className={cn(
-                  "text-[10px] font-bold w-4 text-center shrink-0",
-                  f.status === "A" ? "text-emerald-400" : f.status === "D" ? "text-red-400" : "text-blue-400"
-                )}>
-                  {f.status}
-                </span>
-                <span className="flex-1 text-xs text-white/60 font-mono truncate">{f.path}</span>
-                <span className="text-[10px] font-mono text-emerald-400/60 shrink-0">+{f.additions}</span>
-                <span className="text-[10px] font-mono text-red-400/50 shrink-0">-{f.deletions}</span>
-              </div>
-            ))}
-          </div>
+          {loading ? (
+            <div className="flex items-center gap-2 text-white/25 text-xs px-3 py-3">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Fetching diff…
+            </div>
+          ) : files.length === 0 ? (
+            <p className="text-xs text-white/20 px-3 py-2">No file data available</p>
+          ) : (
+            <div className="space-y-1.5">
+              {files.map((f, i) => (
+                <div key={i} className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02]">
+                  <span className={cn(
+                    "text-[10px] font-bold w-4 text-center shrink-0",
+                    f.status === "A" ? "text-emerald-400" : f.status === "D" ? "text-red-400" : "text-blue-400"
+                  )}>
+                    {f.status}
+                  </span>
+                  <span className="flex-1 text-xs text-white/60 font-mono truncate">{f.path}</span>
+                  <span className="text-[10px] font-mono text-emerald-400/60 shrink-0">+{f.additions}</span>
+                  <span className="text-[10px] font-mono text-red-400/50 shrink-0">-{f.deletions}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -244,15 +272,59 @@ export interface CommitsPanelProps {
   selectedBranch: string;
   isFullscreen:   boolean;
   onFullscreen:   () => void;
+  /** Pre-fetched commits — skips the in-component fetch if provided. */
+  initialCommits?: RepoCommit[];
 }
 
-export function CommitsPanel({ project, selectedBranch, isFullscreen, onFullscreen }: CommitsPanelProps) {
-  const [search,       setSearch]       = useState("");
-  const [filterOpen,   setFilterOpen]   = useState(false);
-  const [activeTypes,  setActiveTypes]  = useState<Set<CommitType>>(new Set());
-  const [selectedCommit, setSelected]   = useState<Commit | null>(null);
+export function CommitsPanel({ project, selectedBranch, isFullscreen, onFullscreen, initialCommits }: CommitsPanelProps) {
+  const [search,        setSearch]       = useState("");
+  const [filterOpen,    setFilterOpen]   = useState(false);
+  const [activeTypes,   setActiveTypes]  = useState<Set<CommitType>>(new Set());
+  const [selectedCommit, setSelected]    = useState<RepoCommit | null>(null);
 
-  const allCommits = useMemo(() => genCommits(project, selectedBranch), [project.id, selectedBranch]);
+  // Real GitHub data state
+  const [realCommits, setRealCommits]    = useState<RepoCommit[] | null>(initialCommits ?? null);
+  const [loadingCom,  setLoadingCom]     = useState(false);
+  const [fetchErr,    setFetchErr]       = useState<string | null>(null);
+
+  const hasRepo = !!project.githubRepo;
+
+  const fetchCommits = useCallback(async (fullName: string, branch: string) => {
+    setLoadingCom(true);
+    setFetchErr(null);
+    try {
+      const commits = await getRepoCommits(fullName, branch);
+      setRealCommits(commits);
+    } catch (err) {
+      setFetchErr(err instanceof Error ? err.message : "Failed to fetch commits");
+      setRealCommits(null);
+    } finally {
+      setLoadingCom(false);
+    }
+  }, []);
+
+  // Fetch when repo / branch changes (skip if pre-loaded)
+  useEffect(() => {
+    if (!project.githubRepo) {
+      setRealCommits(null);
+      return;
+    }
+    if (initialCommits) {
+      setRealCommits(initialCommits);
+      return;
+    }
+    fetchCommits(project.githubRepo.fullName, selectedBranch);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.githubRepo?.fullName, selectedBranch]);
+
+  const mockCommits = useMemo(
+    () => genCommits(project, selectedBranch),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [project.id, selectedBranch]
+  );
+
+  // Use real data when available; fall back to mock when no repo
+  const allCommits = hasRepo ? (realCommits ?? []) : mockCommits;
 
   const commits = useMemo(() => {
     let list = allCommits;
@@ -282,7 +354,25 @@ export function CommitsPanel({ project, selectedBranch, isFullscreen, onFullscre
         isFullscreen={isFullscreen}
         onFullscreen={onFullscreen}
         onBack={() => setSelected(null)}
+        repoFullName={project.githubRepo?.fullName}
       />
+    );
+  }
+
+  // ── No repo — empty state ────────────────────────────────────────────────────
+  if (!hasRepo) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
+        <div className="w-10 h-10 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
+          <GHIcon className="h-5 w-5 text-white/20" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-white/35">No GitHub repo connected</p>
+          <p className="text-xs text-white/20 mt-1 leading-relaxed">
+            Connect a repo in the Overview tab to see real commit history
+          </p>
+        </div>
+      </div>
     );
   }
 
@@ -353,7 +443,22 @@ export function CommitsPanel({ project, selectedBranch, isFullscreen, onFullscre
 
       {/* Commit list */}
       <div className="flex-1 overflow-y-auto space-y-1 min-h-0 pb-16">
-        {commits.length === 0 ? (
+        {loadingCom ? (
+          <div className="flex flex-col items-center justify-center h-32 gap-2 text-white/25">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span className="text-xs">Fetching commits…</span>
+          </div>
+        ) : fetchErr ? (
+          <div className="flex flex-col items-center justify-center h-32 gap-2 text-center px-4">
+            <p className="text-xs text-red-400/60">{fetchErr}</p>
+            <button
+              onClick={() => project.githubRepo && fetchCommits(project.githubRepo.fullName, selectedBranch)}
+              className="text-xs text-white/30 hover:text-white/60 transition"
+            >
+              Retry
+            </button>
+          </div>
+        ) : commits.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-center">
             <p className="text-sm text-white/30">No commits found</p>
           </div>

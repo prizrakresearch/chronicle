@@ -9,23 +9,37 @@ import { SplashScreen } from "./splash-screen";
 // because the Next.js App Router layout never unmounts between pages.
 let splashDone = false;
 
+// Duration of the overlay fade-out, in ms. Intentionally matches the
+// splashReveal keyframe duration in globals.css so they end together.
+const REVEAL_MS = 500;
+
 export function ClientBackground() {
   const [splashActive, setSplashActive] = useState<boolean>(() => !splashDone);
+  const [revealing, setRevealing] = useState(false);
 
   function handleSplashDone() {
     splashDone = true;
-    setSplashActive(false);
+
+    // 1. Drop the dither canvas to its resting z-index immediately.
+    // 2. Begin fading the black overlay (CSS transition kicks in on next paint).
+    // 3. Signal the dashboard wrapper to run its entrance animation.
+    setRevealing(true);
+    document.documentElement.classList.add("splash-revealed");
+
+    // Remove the overlay element from the DOM once it has fully faded.
+    setTimeout(() => setSplashActive(false), REVEAL_MS);
   }
 
   return (
     <>
       {/*
-       * During splash  → elevated=true  puts the canvas at z-9997, above the
-       *   dashboard HTML, so only the dither animation (+ overlay below) is
-       *   visible through the transparent splash layer.
-       * After splash   → elevated=false drops it back to z--10 (normal).
-       * rampDurationMs → only meaningful during the splash phase; after that
-       *   the canvas is already at full intensity so the value doesn't matter.
+       * elevated=true  → canvas at z-9997, above dashboard HTML.
+       * elevated=false → canvas drops back to z--10 (decorative layer).
+       * We drop it as soon as the reveal starts so the dither animation
+       * never interferes with the content entrance.
+       * rampDurationMs → colour intensity fades in from black over this
+       * period.  3 s matches the new 5 s splash: peak at ~3 s, 2 s of
+       * full intensity before the splash ends.
        */}
       <DitherBackground
         waveColor={[0.243, 0.251, 0.243]}
@@ -35,18 +49,27 @@ export function ClientBackground() {
         waveSpeed={0.05}
         mouseRadius={0.5}
         enableMouseInteraction={true}
-        rampDurationMs={7000}
-        elevated={splashActive}
+        rampDurationMs={3000}
+        elevated={splashActive && !revealing}
       />
 
-      {/* 80 % black overlay — raised alongside the canvas during splash */}
+      {/*
+       * Permanent background darkener — always rendered, always behind app
+       * content (z: -5) but above the dither canvas (z: -10).  Tones the
+       * animated background down so the UI stays legible at all times.
+       */}
       <div
         className="fixed inset-0 bg-black pointer-events-none"
-        style={{ opacity: 0.8, zIndex: splashActive ? 9998 : -5 }}
+        style={{ opacity: 0.80, zIndex: -5 }}
       />
 
-      {/* Logo + wordmark overlay — topmost layer, only during splash */}
-      {splashActive && <SplashScreen onDone={handleSplashDone} />}
+      {/* Splash content — wordmark + Prizrak Labs footer.
+          The elevated DitherBackground canvas (z-9997) already covers the
+          dashboard while the .splash-reveal-target CSS keeps the UI at
+          opacity:0, so no separate black overlay is needed. */}
+      {splashActive && !revealing && (
+        <SplashScreen onDone={handleSplashDone} />
+      )}
     </>
   );
 }

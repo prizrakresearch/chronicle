@@ -15,6 +15,7 @@ import { CredentialsPanel } from "@/components/notes/credentials-panel";
 import { useProjects } from "@/lib/store/projects-context";
 import { cn } from "@/lib/utils";
 import type { Project, ProjectLink, ProjectFile } from "@/types";
+import type { RepoBranch, RepoCommit } from "@/lib/db/github";
 import { createPortal } from "react-dom";
 
 // ── Icon / colour helpers ─────────────────────────────────────────────────────
@@ -317,7 +318,7 @@ interface FilesPanelProps {
 }
 
 function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaChange, showCredentials, onToggleCredentials }: FilesPanelProps) {
-  const { getLinks, getProjectFiles, addProjectFile, deleteLink, deleteProjectFile, isReadOnly } = useProjects();
+  const { getLinks, getProjectFiles, uploadFile, deleteLink, deleteProjectFile, isReadOnly } = useProjects();
   const [addLinkOpen,      setAddLinkOpen]  = useState(false);
   const [dragOver,         setDragOver]     = useState(false);
   const [uploading,        setUploading]    = useState(false);
@@ -365,13 +366,13 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
   async function ingestFiles(fileList: FileList | File[]) {
     const arr = Array.from(fileList); if (!arr.length) return;
     setUploading(true);
-    await Promise.all(arr.map(async f => {
-      const dataUrl = await new Promise<string>((res, rej) => {
-        const r = new FileReader(); r.onload = e => res(e.target?.result as string); r.onerror = rej; r.readAsDataURL(f);
-      });
-      addProjectFile({ projectId, name: f.name, mimeType: f.type || "application/octet-stream", size: f.size, dataUrl, createdAt: new Date().toISOString() });
-    }));
-    setUploading(false);
+    try {
+      await Promise.all(arr.map((f) => uploadFile(f, projectId)));
+    } catch (err) {
+      console.error("[files-view] upload failed:", err);
+    } finally {
+      setUploading(false);
+    }
   }
 
   const handleDragEnter = (e: React.DragEvent) => { e.preventDefault(); dragCounter.current++; setDragOver(true); };
@@ -595,9 +596,15 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
 interface FilesViewProps {
   projectId: string;
   project:   Project;
+  /** Pre-loaded branches — passed to GitSidebar to skip its own fetch. */
+  initialBranches?: RepoBranch[];
+  /** Pre-loaded contribution data — passed to GitSidebar to skip its own fetch. */
+  initialContribs?: { date: string; count: number }[];
+  /** Pre-loaded commits — passed to CommitsPanel to skip its own fetch. */
+  initialCommits?: RepoCommit[];
 }
 
-export function FilesView({ projectId, project }: FilesViewProps) {
+export function FilesView({ projectId, project, initialBranches, initialContribs, initialCommits }: FilesViewProps) {
   const { getProjectFiles, getLinks } = useProjects();
   const files  = getProjectFiles(projectId);
   const links  = getLinks(projectId);
@@ -631,6 +638,8 @@ export function FilesView({ projectId, project }: FilesViewProps) {
           links={links}
           selectedBranch={selectedBranch}
           onBranchChange={setSelectedBranch}
+          initialBranches={initialBranches}
+          initialContribs={initialContribs}
         />
       </div>
 
@@ -641,6 +650,7 @@ export function FilesView({ projectId, project }: FilesViewProps) {
           selectedBranch={selectedBranch}
           isFullscreen={commitsFullscreen}
           onFullscreen={() => setCommitsFullscreen(v => !v)}
+          initialCommits={initialCommits}
         />
         {commitsFullscreen && (
           <FullscreenOverlay onClose={() => setCommitsFullscreen(false)}>

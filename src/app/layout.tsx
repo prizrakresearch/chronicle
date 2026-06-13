@@ -21,7 +21,8 @@ const geistMono = Geist_Mono({
 const playfair = Playfair_Display({
   variable: "--font-playfair",
   subsets: ["latin"],
-  weight: ["700"],
+  weight: ["400", "700"],
+  style:   ["normal", "italic"],
 });
 
 export const metadata: Metadata = {
@@ -63,7 +64,96 @@ export default function RootLayout({
         <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/the-seasons" />
       </head>
       <body className="text-foreground antialiased">
-        <ClerkProvider>
+        <ClerkProvider appearance={{
+          variables: {
+            colorBackground:      "#09090b",
+            colorInput:           "#18181b",
+            colorInputForeground: "#f4f4f5",
+            colorForeground:      "rgba(255,255,255,0.85)",
+            colorMutedForeground: "rgba(255,255,255,0.40)",
+            colorPrimary:         "#a3e635",
+            colorDanger:          "#f87171",
+            colorNeutral:         "#ffffff",
+            colorBorder:          "rgba(255,255,255,0.08)",
+            colorModalBackdrop:   "rgba(0,0,0,0.27)",
+            borderRadius:         "0.625rem",
+            fontFamily:           "var(--font-geist-sans), -apple-system, sans-serif",
+            fontSize:             "0.875rem",
+          },
+          elements: {
+            // ── Modal shell ──────────────────────────────────────────────────
+            card: {
+              backgroundColor: "#09090b",
+              border:          "1px solid rgba(255,255,255,0.08)",
+              borderRadius:    "1rem",
+              boxShadow:       "0 25px 50px -12px rgba(0,0,0,0.9)",
+            },
+            modalBackdrop: {
+              backgroundColor: "rgba(0,0,0,0.20)",
+              backdropFilter:  "blur(6px)",
+            },
+            // ── Left nav sidebar ─────────────────────────────────────────────
+            navbar: {
+              backgroundColor: "rgba(255,255,255,0.015)",
+              borderRight:     "1px solid rgba(255,255,255,0.06)",
+              borderRadius:    "1rem 0 0 1rem",
+            },
+            navbarButton: {
+              color:        "rgba(255,255,255,0.45)",
+              borderRadius: "0.625rem",
+              fontSize:     "0.8125rem",
+            },
+            navbarButtonIcon: { color: "rgba(255,255,255,0.30)" },
+            // ── Section headers ──────────────────────────────────────────────
+            profileSectionTitle: {
+              borderBottom:  "1px solid rgba(255,255,255,0.06)",
+              paddingBottom: "0.5rem",
+              marginBottom:  "0.75rem",
+            },
+            profileSectionTitleText: {
+              fontSize:      "0.6875rem",
+              fontWeight:    "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              color:         "rgba(255,255,255,0.28)",
+            },
+            // ── Form fields ──────────────────────────────────────────────────
+            formFieldLabel: { color: "rgba(255,255,255,0.45)", fontSize: "0.75rem" },
+            formFieldInput: {
+              border:       "1px solid rgba(63,63,70,0.9)",
+              borderRadius: "0.75rem",
+            },
+            // ── Buttons ──────────────────────────────────────────────────────
+            formButtonPrimary: {
+              backgroundColor: "#f4f4f5",
+              color:           "#09090b",
+              borderRadius:    "999px",
+              fontWeight:      "600",
+              fontSize:        "0.8125rem",
+              boxShadow:       "none",
+            },
+            formButtonReset: {
+              color:        "rgba(255,255,255,0.40)",
+              borderRadius: "999px",
+              fontSize:     "0.8125rem",
+            },
+            // ── Connected accounts / badges ───────────────────────────────────
+            badge: {
+              backgroundColor: "rgba(255,255,255,0.06)",
+              color:           "rgba(255,255,255,0.45)",
+              borderRadius:    "999px",
+            },
+            // ── Avatar upload button ──────────────────────────────────────────
+            avatarImageActionsUpload: {
+              color:           "#f4f4f5",
+              borderRadius:    "0.75rem",
+              border:          "1px dashed rgba(255,255,255,0.15)",
+              backgroundColor: "transparent",
+            },
+            // ── Hide "Secured by Clerk" footer ────────────────────────────────
+            footer: { display: "none" },
+          },
+        }}>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
@@ -75,7 +165,7 @@ export default function RootLayout({
           <TooltipProvider>
             <ProjectsProvider>
               <CommandPalette />
-              <div className="h-screen overflow-hidden">
+              <div className="h-screen overflow-hidden splash-reveal-target">
                 <main className="h-full overflow-hidden">
                   {children}
                 </main>
