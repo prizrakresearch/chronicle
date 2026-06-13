@@ -89,9 +89,9 @@ export function SplashScreen({ onDone, anonymous = false }: SplashScreenProps) {
         <span
           className="text-sm text-white/25 tracking-wide"
           style={{
-            fontFamily:  "var(--font-playfair)",
-            fontStyle:   "italic",
-            fontWeight:  400,
+            fontFamily: "var(--font-playfair)",
+            fontStyle:  "normal",
+            fontWeight: 700,
           }}
         >
           Prizrak Labs
