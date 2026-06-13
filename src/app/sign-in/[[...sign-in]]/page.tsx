@@ -5,22 +5,12 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
 function SignInContent() {
-  const params = useSearchParams();
+  const params  = useSearchParams();
   const expired = params.get("expired") === "true";
+  const version = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.1.0";
 
   return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6 px-4">
-      {/* Wordmark */}
-      <div className="mb-2 text-center">
-        <h1
-          className="text-2xl font-semibold text-white/80 tracking-wide"
-          style={{ fontFamily: "'The Seasons', serif" }}
-        >
-          Chronicle
-        </h1>
-        <p className="text-xs text-white/25 mt-1">Personal project operating system</p>
-      </div>
-
+    <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-4">
       {/* Expired notice */}
       {expired && (
         <div className="w-full max-w-sm rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-center">
@@ -34,8 +24,8 @@ function SignInContent() {
         appearance={{
           variables: {
             colorPrimary: "#84cc16",
-            colorBackground: "#000000",
-            colorInput: "#0d0d0d",
+            colorBackground: "rgba(0,0,0,0.55)",
+            colorInput: "rgba(255,255,255,0.04)",
             colorInputForeground: "rgba(255,255,255,0.8)",
             colorForeground: "rgba(255,255,255,0.75)",
             colorMutedForeground: "rgba(255,255,255,0.35)",
@@ -44,14 +34,15 @@ function SignInContent() {
             fontFamily: "var(--font-geist-sans)",
           },
           elements: {
-            card: "bg-black border border-white/[0.08] shadow-none",
+            card: "border border-white/[0.08] shadow-none backdrop-blur-md",
             headerTitle: "text-white/80",
             headerSubtitle: "text-white/30",
             socialButtonsBlockButton:
-              "border-white/10 text-white/50 hover:border-white/20 hover:bg-white/[0.04]",
+              "bg-white/[0.08] border border-white/[0.14] text-white/75 hover:bg-white/[0.13] hover:border-white/25 hover:text-white/90 transition-all",
+            socialButtonsBlockButtonText: "font-medium",
             formFieldLabel: "text-white/40 text-xs",
             formFieldInput:
-              "bg-white/[0.04] border-white/10 text-white/80 placeholder:text-white/20 focus:border-primary",
+              "bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/20",
             footerActionText: "text-white/25",
             footerActionLink: "text-primary/70 hover:text-primary",
             dividerText: "text-white/20",
@@ -59,6 +50,17 @@ function SignInContent() {
           },
         }}
       />
+
+      {/* Version + studio credit */}
+      <p className="text-xs text-white/20">
+        v{version}&nbsp;&nbsp;·&nbsp;&nbsp;Developed by{" "}
+        <span
+          className="text-white/30 font-bold"
+          style={{ fontFamily: "var(--font-playfair)" }}
+        >
+          Prizrak Labs
+        </span>
+      </p>
     </div>
   );
 }
