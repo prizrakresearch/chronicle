@@ -20,10 +20,6 @@ function SignInContent() {
 
       <SignIn
         appearance={{
-          layout: {
-            // Force full "Continue with Google / Apple" label, never icon-only
-            socialButtonsVariant: "blockButton",
-          },
           variables: {
             colorPrimary: "#84cc16",
             colorBackground: "rgba(0,0,0,0.55)",
