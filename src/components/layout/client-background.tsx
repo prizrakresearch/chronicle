@@ -63,10 +63,17 @@ export function ClientBackground() {
         style={{ opacity: 0.80, zIndex: -5 }}
       />
 
-      {/* Splash content — wordmark + Prizrak Labs footer.
-          The elevated DitherBackground canvas (z-9997) already covers the
-          dashboard while the .splash-reveal-target CSS keeps the UI at
-          opacity:0, so no separate black overlay is needed. */}
+      {/* 80 % black overlay that sits between the elevated dither canvas
+          (z-9997) and the splash text (z-9999). Without this the dither
+          is fully visible at full brightness during the splash. */}
+      {splashActive && !revealing && (
+        <div
+          className="fixed inset-0 bg-black pointer-events-none"
+          style={{ opacity: 0.80, zIndex: 9998 }}
+        />
+      )}
+
+      {/* Splash content — wordmark + Prizrak Labs footer. */}
       {splashActive && !revealing && (
         <SplashScreen onDone={handleSplashDone} />
       )}
