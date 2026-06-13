@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/_clerk/:path*",
-        destination: "https://clerk.chroniclepl.vercel.app/:path*",
+        destination: "https://clerk.chornicle.dapdf.com/:path*",
       },
     ];
   },
