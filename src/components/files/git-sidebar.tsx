@@ -200,7 +200,6 @@ export function GitSidebar({ project, files, links, selectedBranch, onBranchChan
         <div className="space-y-2.5">
           <MetaRow icon={Calendar}  label="Started"  value={fmtDate(project.createdAt)} />
           <MetaRow icon={User}      label="Author"   value={author} />
-          <MetaRow icon={GitBranch} label="Version"  value="v0.1.0" />
           <MetaRow icon={HardDrive} label="Size"     value={fmtSize(totalSize)} />
           <MetaRow icon={FileText}  label="Files"    value={String(files.length)} />
           <MetaRow icon={Link2}     label="Links"    value={String(links.length)} />
