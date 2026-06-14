@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ImageIcon, Upload, X, Link2 } from "lucide-react";
 import {
   Dialog,
@@ -46,22 +46,23 @@ interface IconPickerProps {
 }
 
 function IconPicker({ preview, onPreview, onClear }: IconPickerProps) {
-  const [mode, setMode]     = useState<IconMode>(null);
+  const [mode, setMode]         = useState<IconMode>(null);
   const [urlDraft, setUrlDraft] = useState("");
   const [urlError, setUrlError] = useState(false);
+  const inputRef                = useRef<HTMLInputElement>(null);
 
   // ── file upload ──
+  // Use createObjectURL for an instant synchronous preview — avoids all
+  // async FileReader timing issues inside a focus-trapped Dialog.
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      onPreview(ev.target?.result as string);
-      setMode(null);
-      setUrlDraft("");
-    };
-    reader.readAsDataURL(file);
-    e.target.value = "";
+    const objectUrl = URL.createObjectURL(file);
+    onPreview(objectUrl);
+    setMode(null);
+    setUrlDraft("");
+    // Reset after state update so the same file can be re-selected
+    setTimeout(() => { if (inputRef.current) inputRef.current.value = ""; }, 0);
   }
 
   // ── URL entry ──
@@ -117,13 +118,20 @@ function IconPicker({ preview, onPreview, onClear }: IconPickerProps) {
           {/* Mode buttons */}
           {mode === null && (
             <div className="flex flex-wrap gap-1.5">
-              <label
-                htmlFor="icon-file-upload"
-                className="h-8 px-3 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/8 flex items-center gap-1.5 transition duration-150 cursor-pointer"
-              >
-                <Upload className="h-3 w-3" />
-                Upload
-              </label>
+              <div className="relative inline-flex">
+                <span className="h-8 px-3 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/8 flex items-center gap-1.5 transition duration-150 pointer-events-none select-none">
+                  <Upload className="h-3 w-3" />
+                  Upload
+                </span>
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept={ICON_ACCEPT}
+                  onChange={handleFile}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  tabIndex={-1}
+                />
+              </div>
               <button
                 type="button"
                 onClick={() => setMode("url")}
@@ -185,13 +193,6 @@ function IconPicker({ preview, onPreview, onClear }: IconPickerProps) {
         </div>
       </div>
 
-      <input
-        id="icon-file-upload"
-        type="file"
-        accept={ICON_ACCEPT}
-        className="sr-only"
-        onChange={handleFile}
-      />
     </div>
   );
 }
@@ -223,12 +224,30 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
     e.preventDefault();
     if (!name.trim()) return;
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 200));
+
+    // If preview is a blob: URL (from file upload), convert to base64 for persistence
+    let logoUrl: string | null = iconPreview || null;
+    if (logoUrl?.startsWith("blob:")) {
+      try {
+        const res  = await fetch(logoUrl);
+        const blob = await res.blob();
+        logoUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload  = (ev) => resolve(ev.target!.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        URL.revokeObjectURL(iconPreview); // free memory
+      } catch {
+        logoUrl = null; // don't block project creation if conversion fails
+      }
+    }
+
     addProject({
       name:        name.trim(),
       description: description.trim() || null,
       status,
-      logoUrl:     iconPreview || null,
+      logoUrl,
     });
     setLoading(false);
     reset();
