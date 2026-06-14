@@ -2,7 +2,7 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/supabase/server";
-import { buildS3Key, getUploadUrl, getDownloadUrl, deleteObject } from "@/lib/s3/client";
+import { buildFileKey, buildLogoKey, getUploadUrl, getDownloadUrl, deleteObject } from "@/lib/s3/client";
 import { revalidatePath } from "next/cache";
 import type { LinkType } from "@/lib/supabase/types";
 
@@ -21,8 +21,7 @@ export async function requestLogoUploadUrl(
   const meta = (sessionClaims?.metadata ?? {}) as { role?: string };
   if (meta.role !== "owner") throw new Error("Forbidden");
 
-  const safe = filename.replace(/[/\\]/g, "_");
-  const key  = `logos/${userId}/${projectId}/${crypto.randomUUID()}/${safe}`;
+  const key  = buildLogoKey(userId, projectId, filename);
   const url  = await getUploadUrl(key, mimeType);
   return { uploadUrl: url, s3Key: key };
 }
@@ -165,7 +164,7 @@ export async function requestUploadUrl(input: {
   const meta = (sessionClaims?.metadata ?? {}) as { role?: string };
   if (meta.role !== "owner") throw new Error("Forbidden");
 
-  const key = buildS3Key(userId, input.project_id, input.filename);
+  const key = buildFileKey(userId, input.project_id, input.filename);
   const url = await getUploadUrl(key, input.mime_type);
   return { uploadUrl: url, s3Key: key };
 }

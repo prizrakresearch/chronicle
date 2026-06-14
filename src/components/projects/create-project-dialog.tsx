@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { ImageIcon, Upload, X, Link2 } from "lucide-react";
 import {
   Dialog,
@@ -52,15 +52,31 @@ function IconPicker({ preview, onPreview, onClear }: IconPickerProps) {
   const inputRef                = useRef<HTMLInputElement>(null);
 
   // ── file upload ──
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  // Use a stable callback ref so the native listener always calls the latest
+  // version of onPreview without needing to re-register.
+  const onPreviewRef = useRef(onPreview);
+  useEffect(() => { onPreviewRef.current = onPreview; }, [onPreview]);
+
+  const handleFilePick = useCallback((input: HTMLInputElement) => {
+    const file = input.files?.[0];
     if (!file) return;
     const objectUrl = URL.createObjectURL(file);
-    onPreview(objectUrl, file);           // pass File so parent can upload to S3
+    onPreviewRef.current(objectUrl, file);
     setMode(null);
     setUrlDraft("");
-    setTimeout(() => { if (inputRef.current) inputRef.current.value = ""; }, 0);
-  }
+    // Reset so the same file can be re-selected
+    setTimeout(() => { input.value = ""; }, 0);
+  }, []);
+
+  // Native listener — bypasses React's synthetic event system and the
+  // @base-ui Dialog focus-trap that prevents onChange from firing on macOS.
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    const listener = () => handleFilePick(input);
+    input.addEventListener("change", listener);
+    return () => input.removeEventListener("change", listener);
+  }, [handleFilePick]);
 
   // ── URL entry ──
   function handleUrlApply() {
@@ -124,7 +140,6 @@ function IconPicker({ preview, onPreview, onClear }: IconPickerProps) {
                   ref={inputRef}
                   type="file"
                   accept={ICON_ACCEPT}
-                  onChange={handleFile}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   tabIndex={-1}
                 />
@@ -210,6 +225,7 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
   const [iconPreview, setIconPreview] = useState(""); // blob: URL for local preview
   const [iconFile,    setIconFile]    = useState<File | null>(null);
   const [loading,     setLoading]     = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   function reset() {
     setName("");
@@ -217,6 +233,7 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
     setStatus("active");
     setIconPreview("");
     setIconFile(null);
+    setUploadError(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -233,23 +250,24 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
     // Upload logo to S3 if the user picked a file
     if (iconFile) {
       try {
-        const { requestUploadUrl } = await import("@/lib/db/files");
-        const { uploadUrl, s3Key } = await requestUploadUrl({
-          project_id: projectId,
-          filename:   iconFile.name,
-          mime_type:  iconFile.type || "image/png",
-        });
-        await fetch(uploadUrl, {
+        const { requestLogoUploadUrl } = await import("@/lib/db/files");
+        const { uploadUrl, s3Key } = await requestLogoUploadUrl(
+          projectId,
+          iconFile.name,
+          iconFile.type || "image/png",
+        );
+        const putRes = await fetch(uploadUrl, {
           method:  "PUT",
           body:    iconFile,
           headers: { "Content-Type": iconFile.type || "image/png" },
         });
+        if (!putRes.ok) throw new Error(`S3 PUT failed: ${putRes.status} ${putRes.statusText}`);
         logoS3Key = s3Key;
         // Keep the blob URL as optimistic display — DB will generate presigned URLs on next load
         logoUrl   = iconPreview;
       } catch (err) {
         console.error("[CreateProject] logo S3 upload failed:", err);
-        // Don't block project creation — just skip the logo
+        setUploadError(err instanceof Error ? err.message : "Logo upload failed — project will be created without it.");
         logoUrl = null;
       }
       URL.revokeObjectURL(iconPreview);
@@ -294,8 +312,8 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
           {/* Icon picker */}
           <IconPicker
             preview={iconPreview}
-            onPreview={(url, file) => { setIconPreview(url); if (file) setIconFile(file); }}
-            onClear={() => { setIconPreview(""); setIconFile(null); }}
+            onPreview={(url, file) => { setIconPreview(url); if (file) setIconFile(file); setUploadError(null); }}
+            onClear={() => { setIconPreview(""); setIconFile(null); setUploadError(null); }}
           />
 
           {/* Description */}
@@ -338,6 +356,13 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
               ))}
             </div>
           </div>
+
+          {/* Upload error banner */}
+          {uploadError && (
+            <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2">
+              <p className="text-xs text-red-400/80">{uploadError}</p>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex gap-2 pt-2">

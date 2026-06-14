@@ -24,15 +24,51 @@ export const s3 = new S3Client({
   },
 });
 
+// ── S3 Key Schema ────────────────────────────────────────────────────────────
+//
+// All keys follow the pattern:  {type}/{ownerId}/...
+//
+//   logos/   {ownerId}/{projectId}/{uuid}/{filename}   → project logos
+//   files/   {ownerId}/{projectId}/{uuid}/{filename}   → file-panel uploads
+//   notes/   {ownerId}/{projectId}/{noteId}/{uuid}/{filename}  → note attachments (future)
+//   exports/ {ownerId}/{projectId}/{uuid}/report.pdf   → generated exports (future)
+//
+// Rationale:
+//   • Type-first enables per-prefix IAM policies and S3 lifecycle rules
+//   • UUID before filename prevents collisions and hotspot sharding
+//   • ownerId + projectId allow bulk-delete on project/user removal
+// ─────────────────────────────────────────────────────────────────────────────
+
+function safeName(filename: string): string {
+  return filename.replace(/[/\\]/g, "_");
+}
+
+/** Key for a project logo.  Pattern: logos/{ownerId}/{projectId}/{uuid}/{filename} */
+export function buildLogoKey(ownerId: string, projectId: string, filename: string): string {
+  return `logos/${ownerId}/${projectId}/${crypto.randomUUID()}/${safeName(filename)}`;
+}
+
+/** Key for a file-panel upload.  Pattern: files/{ownerId}/{projectId}/{uuid}/{filename} */
+export function buildFileKey(ownerId: string, projectId: string, filename: string): string {
+  return `files/${ownerId}/${projectId}/${crypto.randomUUID()}/${safeName(filename)}`;
+}
+
+/** Key for an attachment inside a markdown note.  Pattern: notes/{ownerId}/{projectId}/{noteId}/{uuid}/{filename} */
+export function buildNoteAttachmentKey(ownerId: string, projectId: string, noteId: string, filename: string): string {
+  return `notes/${ownerId}/${projectId}/${noteId}/${crypto.randomUUID()}/${safeName(filename)}`;
+}
+
+/** Key for a generated export (PDF, CSV, etc.).  Pattern: exports/{ownerId}/{projectId}/{uuid}/{filename} */
+export function buildExportKey(ownerId: string, projectId: string, filename: string): string {
+  return `exports/${ownerId}/${projectId}/${crypto.randomUUID()}/${safeName(filename)}`;
+}
+
 /**
- * Build the S3 object key for a project file.
- * Pattern: {ownerId}/{projectId}/{randomId}/{filename}
+ * @deprecated Use buildFileKey instead.
+ * Kept temporarily so any direct callers don't break during the migration.
  */
 export function buildS3Key(ownerId: string, projectId: string, filename: string): string {
-  const id = crypto.randomUUID();
-  // sanitise filename — strip path separators
-  const safe = filename.replace(/[/\\]/g, "_");
-  return `${ownerId}/${projectId}/${id}/${safe}`;
+  return buildFileKey(ownerId, projectId, filename);
 }
 
 /**
