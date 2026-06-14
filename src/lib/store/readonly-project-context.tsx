@@ -20,6 +20,7 @@ interface ProjectsContextValue {
   projects: Project[];
   loading:  boolean;
 
+  refreshProjects: () => Promise<void>;
   addProject:    (data: { name: string; description: string | null; status: ProjectStatus; logoUrl?: string | null }) => Project;
   updateProject: (id: string, updates: Partial<Omit<Project, "id" | "createdAt" | "githubRepo">>) => void;
   deleteProject: (id: string) => void;
@@ -115,6 +116,7 @@ export function ReadOnlyProjectsProvider({
     setPin:   noop,
     clearPin: noop,
 
+    refreshProjects:  asyncNoop,
     saveGithubToken:  asyncNoop,
     clearGithubToken: asyncNoop,
     linkRepo:         asyncNoop,

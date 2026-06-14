@@ -54,6 +54,7 @@ interface ProjectsContextValue {
   projects: Project[];
   loading:  boolean;
 
+  refreshProjects: () => Promise<void>;
   addProject:    (data: { name: string; description: string | null; status: ProjectStatus; logoUrl?: string | null }) => Project;
   updateProject: (id: string, updates: Partial<Omit<Project, "id" | "createdAt" | "githubRepo">>) => void;
   deleteProject: (id: string) => void;
@@ -207,6 +208,34 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   const clearPin = useCallback(() => {
     localStorage.removeItem("chronicle_pin");
     setPinState(null);
+  }, []);
+
+  // ── Refresh (re-fetch all from DB) ──────────────────────────────────────────
+
+  const refreshProjects = useCallback(async () => {
+    try {
+      const rows = await dbGetProjects();
+      const loadedProjects: Project[]       = [];
+      const loadedTimeline: TimelineEvent[] = [];
+      const loadedRoadmap:  RoadmapItem[]   = [];
+      const loadedLinks:    ProjectLink[]   = [];
+
+      for (const row of rows as never[]) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const r = row as any;
+        loadedProjects.push(toProject(r));
+        for (const ri of r.roadmap_items   ?? []) loadedRoadmap.push(toRoadmapItem(ri));
+        for (const te of r.timeline_events ?? []) loadedTimeline.push(toTimelineEvent(te));
+        for (const lk of r.project_links   ?? []) loadedLinks.push(toProjectLink(lk));
+      }
+
+      setProjects(loadedProjects);
+      setRoadmapItems(loadedRoadmap);
+      setTimelineEvents(loadedTimeline);
+      setLinks(loadedLinks);
+    } catch (err) {
+      console.error("[ProjectsContext] refreshProjects failed:", err);
+    }
   }, []);
 
   // ── Project mutations ────────────────────────────────────────────────────────
@@ -564,6 +593,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       value={{
         projects,
         loading,
+        refreshProjects,
         addProject,
         updateProject,
         deleteProject,

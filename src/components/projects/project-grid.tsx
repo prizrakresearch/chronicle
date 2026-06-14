@@ -3,13 +3,14 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   Plus, Search, FolderOpen, LayoutGrid, Zap, PauseCircle, Archive,
-  EyeOff, Lock, Unlock,
+  EyeOff, Lock, Unlock, GitBranch,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ProjectRow } from "./project-row";
 import { ProjectCardSkeleton } from "./project-card-skeleton";
 import { CreateProjectDialog } from "./create-project-dialog";
+import { ImportGithubDialog } from "./import-github-dialog";
 import { PinDialog } from "./pin-dialog";
 import { CalendarPanel } from "@/components/dashboard/calendar-panel";
 import { NotesPanel } from "@/components/dashboard/notes-panel";
@@ -30,6 +31,7 @@ export function ProjectGrid() {
   const [search,       setSearch]       = useState("");
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | "all">("all");
   const [createOpen,   setCreateOpen]   = useState(false);
+  const [importOpen,   setImportOpen]   = useState(false);
 
   // Hidden-projects reveal state
   const [hiddenVisible, setHiddenVisible] = useState(false);
@@ -162,14 +164,24 @@ export function ProjectGrid() {
         <h1 className="text-sm font-semibold text-white/80">Chronicle</h1>
         <div className="flex items-center gap-2">
           {!isReadOnly && (
-            <Button
-              onClick={() => setCreateOpen(true)}
-              size="sm"
-              className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 gap-2 transition duration-200 ease-in-out"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              New project
-            </Button>
+            <>
+              <Button
+                onClick={() => setImportOpen(true)}
+                size="sm"
+                className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-white/40 border border-white/15 hover:text-white/70 hover:border-white/30 hover:-translate-y-px active:translate-y-0 gap-2 transition duration-200 ease-in-out"
+              >
+                <GitBranch className="h-3.5 w-3.5" />
+                Import
+              </Button>
+              <Button
+                onClick={() => setCreateOpen(true)}
+                size="sm"
+                className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 gap-2 transition duration-200 ease-in-out"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New project
+              </Button>
+            </>
           )}
           <UserBadge />
         </div>
@@ -337,6 +349,7 @@ export function ProjectGrid() {
 
       {/* Dialogs */}
       <CreateProjectDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <ImportGithubDialog  open={importOpen} onOpenChange={setImportOpen} />
       <PinDialog
         mode={pinDialogMode}
         storedPin={pin}

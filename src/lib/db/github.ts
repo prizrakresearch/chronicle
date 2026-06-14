@@ -383,3 +383,83 @@ export async function getCommitDetail(
     })),
   };
 }
+
+// ── Bulk import ───────────────────────────────────────────────────────────────
+
+export interface ImportedProject {
+  projectId: string;
+  name:      string;
+  fullName:  string;
+}
+
+/**
+ * Create a Chronicle project for each selected GitHub repo and link the repo
+ * in one go. Skips repos that are already linked to an existing project.
+ * Returns the list of newly-created projects.
+ */
+export async function importReposAsProjects(
+  repos: Pick<UserRepo, "id" | "fullName" | "description" | "defaultBranch">[]
+): Promise<ImportedProject[]> {
+  const ownerId = await requireOwner();
+
+  // Find repos that are already linked so we can skip them
+  const { data: existing } = await db
+    .from("github_repos")
+    .select("github_id")
+    .in("github_id", repos.map(r => r.id));
+
+  const alreadyLinked = new Set((existing ?? []).map(r => r.github_id));
+
+  const toImport = repos.filter(r => !alreadyLinked.has(r.id));
+  if (toImport.length === 0) return [];
+
+  const results: ImportedProject[] = [];
+
+  for (const repo of toImport) {
+    // Derive a clean project name from the repo slug
+    const name = repo.fullName.split("/")[1]
+      .replace(/-/g, " ")
+      .replace(/\b\w/g, c => c.toUpperCase());
+
+    const projectId = crypto.randomUUID();
+
+    // 1. Create the project row
+    const { error: projErr } = await db
+      .from("projects")
+      .insert({
+        id:          projectId,
+        owner_id:    ownerId,
+        name,
+        description: repo.description,
+        status:      "active",
+        logo_url:    null,
+      });
+
+    if (projErr) {
+      console.error(`Failed to create project for ${repo.fullName}:`, projErr);
+      continue;
+    }
+
+    // 2. Link the GitHub repo
+    const { error: repoErr } = await db
+      .from("github_repos")
+      .insert({
+        project_id:     projectId,
+        github_id:      repo.id,
+        full_name:      repo.fullName,
+        default_branch: repo.defaultBranch,
+        description:    repo.description,
+        stars:          0,
+        last_synced_at: new Date().toISOString(),
+      });
+
+    if (repoErr) {
+      console.error(`Failed to link repo ${repo.fullName}:`, repoErr);
+      // Still add the project even if repo link fails
+    }
+
+    results.push({ projectId, name, fullName: repo.fullName });
+  }
+
+  return results;
+}
