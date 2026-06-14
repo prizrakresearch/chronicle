@@ -119,7 +119,7 @@ function IconPicker({ preview, onPreview, onClear }: IconPickerProps) {
               src={preview}
               alt="icon preview"
               className="w-full h-full object-cover"
-              onError={(e) => { console.log("[IconPicker] img onError, src:", (e.target as HTMLImageElement).src); setUrlError(true); onClear(); }}
+              onError={() => { setUrlError(true); onClear(); }}
             />
           ) : (
             <ImageIcon className="h-6 w-6 text-white/20" />
@@ -266,7 +266,6 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
         // Keep the blob URL as optimistic display — DB will generate presigned URLs on next load
         logoUrl   = iconPreview;
       } catch (err) {
-        console.error("[CreateProject] logo S3 upload failed:", err);
         setUploadError(err instanceof Error ? err.message : "Logo upload failed — project will be created without it.");
         logoUrl = null;
       }
