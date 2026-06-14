@@ -123,6 +123,7 @@ export async function createProject(input: {
   description: string | null;
   status: ProjectStatus;
   logo_url?: string | null;
+  logo_s3_key?: string | null;
 }) {
   const ownerId = await requireOwner();
   const { data, error } = await db

@@ -40,9 +40,9 @@ const FIELD = [
 type IconMode = "upload" | "url" | null;
 
 interface IconPickerProps {
-  preview: string;
-  onPreview: (url: string) => void;
-  onClear: () => void;
+  preview:   string;
+  onPreview: (url: string, file?: File) => void;
+  onClear:   () => void;
 }
 
 function IconPicker({ preview, onPreview, onClear }: IconPickerProps) {
@@ -52,16 +52,13 @@ function IconPicker({ preview, onPreview, onClear }: IconPickerProps) {
   const inputRef                = useRef<HTMLInputElement>(null);
 
   // ── file upload ──
-  // Use createObjectURL for an instant synchronous preview — avoids all
-  // async FileReader timing issues inside a focus-trapped Dialog.
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     const objectUrl = URL.createObjectURL(file);
-    onPreview(objectUrl);
+    onPreview(objectUrl, file);           // pass File so parent can upload to S3
     setMode(null);
     setUrlDraft("");
-    // Reset after state update so the same file can be re-selected
     setTimeout(() => { if (inputRef.current) inputRef.current.value = ""; }, 0);
   }
 
@@ -106,7 +103,7 @@ function IconPicker({ preview, onPreview, onClear }: IconPickerProps) {
               src={preview}
               alt="icon preview"
               className="w-full h-full object-cover"
-              onError={() => { setUrlError(true); onClear(); }}
+              onError={(e) => { console.log("[IconPicker] img onError, src:", (e.target as HTMLImageElement).src); setUrlError(true); onClear(); }}
             />
           ) : (
             <ImageIcon className="h-6 w-6 text-white/20" />
@@ -210,7 +207,8 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
   const [name,        setName]        = useState("");
   const [description, setDescription] = useState("");
   const [status,      setStatus]      = useState<ProjectStatus>("active");
-  const [iconPreview, setIconPreview] = useState("");
+  const [iconPreview, setIconPreview] = useState(""); // blob: URL for local preview
+  const [iconFile,    setIconFile]    = useState<File | null>(null);
   const [loading,     setLoading]     = useState(false);
 
   function reset() {
@@ -218,6 +216,7 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
     setDescription("");
     setStatus("active");
     setIconPreview("");
+    setIconFile(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -225,29 +224,44 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
     if (!name.trim()) return;
     setLoading(true);
 
-    // If preview is a blob: URL (from file upload), convert to base64 for persistence
-    let logoUrl: string | null = iconPreview || null;
-    if (logoUrl?.startsWith("blob:")) {
+    // Pre-generate the project ID so we can use it as the S3 key path
+    const projectId = crypto.randomUUID();
+
+    let logoUrl:    string | null = iconPreview.startsWith("blob:") ? null : (iconPreview || null);
+    let logoS3Key:  string | null = null;
+
+    // Upload logo to S3 if the user picked a file
+    if (iconFile) {
       try {
-        const res  = await fetch(logoUrl);
-        const blob = await res.blob();
-        logoUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload  = (ev) => resolve(ev.target!.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
+        const { requestUploadUrl } = await import("@/lib/db/files");
+        const { uploadUrl, s3Key } = await requestUploadUrl({
+          project_id: projectId,
+          filename:   iconFile.name,
+          mime_type:  iconFile.type || "image/png",
         });
-        URL.revokeObjectURL(iconPreview); // free memory
-      } catch {
-        logoUrl = null; // don't block project creation if conversion fails
+        await fetch(uploadUrl, {
+          method:  "PUT",
+          body:    iconFile,
+          headers: { "Content-Type": iconFile.type || "image/png" },
+        });
+        logoS3Key = s3Key;
+        // Keep the blob URL as optimistic display — DB will generate presigned URLs on next load
+        logoUrl   = iconPreview;
+      } catch (err) {
+        console.error("[CreateProject] logo S3 upload failed:", err);
+        // Don't block project creation — just skip the logo
+        logoUrl = null;
       }
+      URL.revokeObjectURL(iconPreview);
     }
 
     addProject({
+      id:          projectId,
       name:        name.trim(),
       description: description.trim() || null,
       status,
       logoUrl,
+      logoS3Key,
     });
     setLoading(false);
     reset();
@@ -280,8 +294,8 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
           {/* Icon picker */}
           <IconPicker
             preview={iconPreview}
-            onPreview={setIconPreview}
-            onClear={() => setIconPreview("")}
+            onPreview={(url, file) => { setIconPreview(url); if (file) setIconFile(file); }}
+            onClear={() => { setIconPreview(""); setIconFile(null); }}
           />
 
           {/* Description */}

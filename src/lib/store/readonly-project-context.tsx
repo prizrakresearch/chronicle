@@ -21,7 +21,7 @@ interface ProjectsContextValue {
   loading:  boolean;
 
   refreshProjects: () => Promise<void>;
-  addProject:    (data: { name: string; description: string | null; status: ProjectStatus; logoUrl?: string | null }) => Project;
+  addProject:    (data: { name: string; description: string | null; status: ProjectStatus; logoUrl?: string | null; logoS3Key?: string | null; id?: string }) => Project;
   updateProject: (id: string, updates: Partial<Omit<Project, "id" | "createdAt" | "githubRepo">>) => void;
   deleteProject: (id: string) => void;
   getProject:    (id: string) => Project | undefined;

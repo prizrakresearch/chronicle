@@ -55,7 +55,7 @@ interface ProjectsContextValue {
   loading:  boolean;
 
   refreshProjects: () => Promise<void>;
-  addProject:    (data: { name: string; description: string | null; status: ProjectStatus; logoUrl?: string | null }) => Project;
+  addProject:    (data: { name: string; description: string | null; status: ProjectStatus; logoUrl?: string | null; logoS3Key?: string | null; id?: string }) => Project;
   updateProject: (id: string, updates: Partial<Omit<Project, "id" | "createdAt" | "githubRepo">>) => void;
   deleteProject: (id: string) => void;
   getProject:    (id: string) => Project | undefined;
@@ -241,9 +241,11 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   // ── Project mutations ────────────────────────────────────────────────────────
 
   const addProject = useCallback((data: {
-    name: string; description: string | null; status: ProjectStatus; logoUrl?: string | null;
+    name: string; description: string | null; status: ProjectStatus;
+    logoUrl?: string | null; logoS3Key?: string | null;
+    id?: string; // allow caller to supply pre-generated ID
   }): Project => {
-    const id  = crypto.randomUUID();
+    const id  = data.id ?? crypto.randomUUID();
     const now = new Date();
     const project: Project = {
       id,
@@ -269,10 +271,11 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     // Persist — the SA accepts an explicit id so local + DB share the same UUID
     dbCreateProject({
       id,
-      name:        data.name,
-      description: data.description,
-      status:      data.status as never,
-      logo_url:    data.logoUrl ?? null,
+      name:         data.name,
+      description:  data.description,
+      status:       data.status as never,
+      logo_url:     data.logoUrl ?? null,
+      logo_s3_key:  data.logoS3Key ?? null,
     }).catch(console.error);
 
     return project;
