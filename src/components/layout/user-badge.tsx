@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useUser, useClerk } from "@clerk/nextjs";
-import { LogOut, UserCog, GitBranch as GithubIcon } from "lucide-react";
+import { LogOut, UserCog, GitBranch as GithubIcon, Users } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { GithubTokenModal } from "./github-token-modal";
+import { AccessDialog } from "./access-dialog";
 import { useProjects } from "@/lib/store/projects-context";
 import { cn } from "@/lib/utils";
 
@@ -44,11 +45,13 @@ export function UserBadge() {
   const { user, isLoaded } = useUser();
   const { signOut, openUserProfile } = useClerk();
   const { hasGithubToken, isReadOnly } = useProjects();
-  const [githubOpen, setGithubOpen] = useState(false);
+  const [githubOpen,  setGithubOpen]  = useState(false);
+  const [accessOpen,  setAccessOpen]  = useState(false);
 
   if (!isLoaded || !user) return null;
 
   const meta      = user.publicMetadata as { role?: string; expiresAt?: string } | undefined;
+  const isOwner   = meta?.role === "owner";
   const { label, variant } = getRoleInfo(meta);
 
   const firstName       = user.firstName ?? user.username ?? "User";
@@ -142,6 +145,16 @@ export function UserBadge() {
               )}
             </button>
           )}
+          {/* Owner-only: manage guest access */}
+          {isOwner && (
+            <button
+              onClick={() => setAccessOpen(true)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-white/40 hover:text-white/70 hover:bg-white/[0.05] transition duration-150 ease-in-out"
+            >
+              <Users className="h-3.5 w-3.5 shrink-0" />
+              Manage access
+            </button>
+          )}
           <button
             onClick={() => signOut({ redirectUrl: "/sign-in" })}
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-white/40 hover:text-red-400/70 hover:bg-red-500/[0.05] transition duration-150 ease-in-out"
@@ -153,6 +166,7 @@ export function UserBadge() {
       </PopoverContent>
     </Popover>
     <GithubTokenModal open={githubOpen} onOpenChange={setGithubOpen} />
+    <AccessDialog     open={accessOpen} onOpenChange={setAccessOpen} />
 </>
   );
 }

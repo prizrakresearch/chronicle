@@ -163,6 +163,22 @@ export interface Database {
         Update: { owner_id?: string; created_at?: string; github_token?: string | null };
         Relationships: [];
       };
+
+      access_events: {
+        Row: {
+          id: number; email: string; name: string | null;
+          action: string; expires_at: string | null; created_at: string;
+        };
+        Insert: {
+          email: string; name?: string | null;
+          action: string; expires_at?: string | null; created_at?: string;
+        };
+        Update: {
+          email?: string; name?: string | null;
+          action?: string; expires_at?: string | null; created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

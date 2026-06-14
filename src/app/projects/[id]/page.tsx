@@ -257,15 +257,31 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [activeTab, setActiveTab] = useState<TabValue>(
     (searchParams.get("tab") as TabValue) ?? "overview"
   );
-  const [createOpen, setCreateOpen] = useState(false);
-  const [copied,     setCopied]     = useState(false);
-  const [sharedCopied, setSharedCopied] = useState(false);
+  const [createOpen,  setCreateOpen]  = useState(false);
+  const [copied,      setCopied]      = useState(false);
+  // Share popover state
+  const [shareOpen,   setShareOpen]   = useState(false);
+  const [shareName,   setShareName]   = useState("");
+  const [shareState,  setShareState]  = useState<"idle" | "shared">("idle");
 
-  function handleShare() {
-    const url = `${window.location.origin}/share/${id}`;
-    navigator.clipboard.writeText(url);
-    setSharedCopied(true);
-    setTimeout(() => setSharedCopied(false), 2000);
+  async function handleShareSubmit() {
+    const name = shareName.trim();
+    const url  = `${window.location.origin}/share/${id}${name ? `?to=${encodeURIComponent(name)}` : ""}`;
+
+    // 1. Copy link to clipboard
+    try { await navigator.clipboard.writeText(url); } catch { /* permission denied */ }
+
+    // 2. Open native share sheet (macOS/iOS/Android)
+    if (typeof navigator.share === "function") {
+      try { await navigator.share({ title: project?.name ?? "Chronicle project", url }); } catch { /* user cancelled */ }
+    }
+
+    setShareState("shared");
+    setTimeout(() => {
+      setShareState("idle");
+      setShareOpen(false);
+      setShareName("");
+    }, 1500);
   }
 
   function handleCopyLink() {
@@ -485,14 +501,61 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             {copied ? "Copied!" : "Copy link"}
           </button>
 
-          {/* Share — copies the public /share/[id] URL */}
-          <button
-            onClick={handleShare}
-            className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-violet-400/75 border border-violet-400/75 hover:bg-violet-400/10 hover:-translate-y-px active:translate-y-0 flex items-center gap-2 transition duration-200 ease-in-out"
+          {/* Share — opens popover with optional recipient name, copies link + native share sheet */}
+          <Popover
+            open={shareOpen}
+            onOpenChange={(v) => {
+              setShareOpen(v);
+              if (!v) { setShareName(""); setShareState("idle"); }
+            }}
           >
-            {sharedCopied ? <Check className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
-            {sharedCopied ? "Link copied!" : "Share"}
-          </button>
+            <PopoverTrigger
+              render={
+                <button className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-violet-400/75 border border-violet-400/75 hover:bg-violet-400/10 hover:-translate-y-px active:translate-y-0 flex items-center gap-2 transition duration-200 ease-in-out">
+                  <Share2 className="h-3.5 w-3.5" />
+                  Share
+                </button>
+              }
+            />
+            <PopoverContent
+              side="bottom"
+              align="end"
+              className="w-72 p-4 rounded-2xl bg-zinc-950 border border-white/10 shadow-xl z-50"
+            >
+              <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest mb-3">
+                Share project
+              </p>
+
+              {/* Optional recipient name */}
+              <label className="block text-xs text-white/40 mb-1.5">
+                Recipient name <span className="text-white/20">(optional)</span>
+              </label>
+              <input
+                value={shareName}
+                onChange={(e) => setShareName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleShareSubmit(); }}
+                placeholder="e.g. Alice"
+                className="w-full px-3 py-2 text-sm rounded-xl bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition-colors mb-3"
+              />
+
+              {/* URL preview */}
+              <div className="px-3 py-2 rounded-xl bg-black/40 border border-white/[0.06] mb-3 overflow-hidden">
+                <p className="text-[11px] text-zinc-600 truncate font-mono">
+                  /share/{id}{shareName.trim() ? `?to=${encodeURIComponent(shareName.trim())}` : ""}
+                </p>
+              </div>
+
+              {/* Share button */}
+              <button
+                onClick={handleShareSubmit}
+                className="w-full h-10 flex items-center justify-center gap-2 text-sm font-semibold rounded-full text-violet-400/75 border border-violet-400/75 hover:bg-violet-400/10 active:translate-y-px transition duration-200"
+              >
+                {shareState === "shared"
+                  ? <><Check className="h-3.5 w-3.5" /> Shared!</>
+                  : <><Share2 className="h-3.5 w-3.5" /> Share</>}
+              </button>
+            </PopoverContent>
+          </Popover>
 
           {/* Download repo ZIP */}
           <button

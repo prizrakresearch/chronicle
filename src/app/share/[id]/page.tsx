@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { Download, LayoutGrid, Paperclip,
   Rocket, Globe, Terminal, Database, Layers, Cpu,
   Compass, Flame, Code2, Boxes, Radio, Wand2, Satellite, FlaskConical, Binary,
@@ -53,6 +54,9 @@ const TABS: { value: Tab; label: string; icon: React.ReactNode }[] = [
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function SharePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const searchParams    = useSearchParams();
+  // ?to=Alice → "hi, Alice" on the splash; omitted → "hi"
+  const recipientName   = searchParams.get("to") ?? undefined;
 
   // Phase: "splash" → show splash + load in bg; "ready" → show content
   const [phase, setPhase]   = useState<"splash" | "ready">("splash");
@@ -147,9 +151,10 @@ export default function SharePage({ params }: { params: Promise<{ id: string }> 
         <DitherBackground waveSpeed={0} />
         {/* Dark overlay to keep text legible */}
         <div className="absolute inset-0 bg-black/80 pointer-events-none" />
-        {/* Chronicle-only splash (anonymous skips "Hi, Name") */}
+        {/* Shared-page splash: "hi [name]" if ?to= param is set, else "hi" */}
         <SplashScreen
           anonymous
+          recipientName={recipientName}
           onDone={() => {
             splashDoneRef.current = true;
             maybeTransition();

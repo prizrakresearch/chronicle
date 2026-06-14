@@ -10,29 +10,33 @@ const FADE_MS    = SPLASH_MS - FADE_AT_MS; // 500 ms — outer fade duration
 const CROSS_MS   = 320;                    // cross-fade between the two phrases
 
 interface SplashScreenProps {
-  onDone:     () => void;
-  anonymous?: boolean;  // true → skip "Hi, Name" phase, just show Chronicle
+  onDone:         () => void;
+  anonymous?:     boolean; // true → use recipientName instead of logged-in user's name
+  recipientName?: string;  // name to greet on shared pages (e.g. "Alice"); undefined → "hi"
 }
 
-export function SplashScreen({ onDone, anonymous = false }: SplashScreenProps) {
+export function SplashScreen({ onDone, anonymous = false, recipientName }: SplashScreenProps) {
   const { user } = useUser();
   const [phase,  setPhase]  = useState<0 | 1>(0); // 0 = wordmark, 1 = greeting
   const [fading, setFading] = useState(false);
 
   useEffect(() => {
-    const halfTimer = !anonymous ? setTimeout(() => setPhase(1), HALF_MS) : undefined;
+    // Always cross-fade to greeting — on share pages we say "hi [name]" or just "hi"
+    const halfTimer = setTimeout(() => setPhase(1), HALF_MS);
     const fadeTimer = setTimeout(() => setFading(true), FADE_AT_MS);
     const doneTimer = setTimeout(onDone, SPLASH_MS);
     return () => {
-      if (halfTimer) clearTimeout(halfTimer);
+      clearTimeout(halfTimer);
       clearTimeout(fadeTimer);
       clearTimeout(doneTimer);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Best available display name, with a safe fallback
-  const displayName = user?.firstName ?? user?.username ?? "there";
+  // Owner's session → Clerk name; shared page → recipientName (may be null → just "hi")
+  const displayName = anonymous
+    ? (recipientName ?? null)
+    : (user?.firstName ?? user?.username ?? "there");
 
   return (
     <div
@@ -63,7 +67,7 @@ export function SplashScreen({ onDone, anonymous = false }: SplashScreenProps) {
             Chronicle
           </span>
 
-          {/* Phase 1 — personalised greeting */}
+          {/* Phase 1 — greeting: "hi, [name]" or just "hi" */}
           <span
             className="[grid-area:1/1] font-light text-white/55"
             style={{
@@ -72,8 +76,11 @@ export function SplashScreen({ onDone, anonymous = false }: SplashScreenProps) {
               transition: `opacity ${CROSS_MS}ms ease-in-out`,
             }}
           >
-            Hi,{" "}
-            <span className="font-semibold text-white/85">{displayName}</span>
+            {displayName ? (
+              <>hi,{" "}<span className="font-semibold text-white/85">{displayName}</span></>
+            ) : (
+              <>hi</>
+            )}
           </span>
         </div>
       </div>
