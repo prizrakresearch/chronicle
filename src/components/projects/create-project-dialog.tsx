@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { ImageIcon, Upload, X, Link2 } from "lucide-react";
 import {
   Dialog,
@@ -49,7 +49,6 @@ function IconPicker({ preview, onPreview, onClear }: IconPickerProps) {
   const [mode, setMode]     = useState<IconMode>(null);
   const [urlDraft, setUrlDraft] = useState("");
   const [urlError, setUrlError] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   // ── file upload ──
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -118,14 +117,13 @@ function IconPicker({ preview, onPreview, onClear }: IconPickerProps) {
           {/* Mode buttons */}
           {mode === null && (
             <div className="flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="h-8 px-3 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/8 flex items-center gap-1.5 transition duration-150"
+              <label
+                htmlFor="icon-file-upload"
+                className="h-8 px-3 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/8 flex items-center gap-1.5 transition duration-150 cursor-pointer"
               >
                 <Upload className="h-3 w-3" />
                 Upload
-              </button>
+              </label>
               <button
                 type="button"
                 onClick={() => setMode("url")}
@@ -188,7 +186,7 @@ function IconPicker({ preview, onPreview, onClear }: IconPickerProps) {
       </div>
 
       <input
-        ref={fileRef}
+        id="icon-file-upload"
         type="file"
         accept={ICON_ACCEPT}
         className="hidden"
