@@ -420,7 +420,7 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
             >
               <KeyRound className="h-3.5 w-3.5" />Credentials
             </button>
-            <input ref={fileInputRef} type="file" multiple className="hidden"
+            <input ref={fileInputRef} type="file" multiple className="sr-only"
               onChange={e => { if (e.target.files) ingestFiles(e.target.files); e.target.value = ""; }} />
           </>
         )}

@@ -189,7 +189,7 @@ function IconPicker({ preview, onPreview, onClear }: IconPickerProps) {
         id="icon-file-upload"
         type="file"
         accept={ICON_ACCEPT}
-        className="hidden"
+        className="sr-only"
         onChange={handleFile}
       />
     </div>

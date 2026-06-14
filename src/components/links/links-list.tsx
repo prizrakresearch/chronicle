@@ -250,7 +250,7 @@ export function LinksList({ projectId }: LinksListProps) {
           ref={fileInputRef}
           type="file"
           multiple
-          className="hidden"
+          className="sr-only"
           onChange={handleFileInput}
         />
         {(links.length > 0 || files.length > 0) && (
