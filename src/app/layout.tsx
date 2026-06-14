@@ -96,8 +96,7 @@ export default function RootLayout({
               boxShadow:       "0 25px 50px -12px rgba(0,0,0,0.9)",
             },
             modalBackdrop: {
-              backgroundColor: "rgba(0,0,0,0.20)",
-              backdropFilter:  "blur(6px)",
+              backgroundColor: "rgba(0,0,0,0.55)",
             },
             // ── Left nav sidebar ─────────────────────────────────────────────
             navbar: {
@@ -176,15 +175,10 @@ export default function RootLayout({
                 <main className="h-full overflow-hidden">
                   {children}
                 </main>
-                {/* blur fade — sits above scroll, below bar text */}
+                {/* fade — gradient overlay, no blur */}
                 <div
                   className="fixed bottom-0 left-0 right-0 h-24 pointer-events-none z-10"
-                  style={{
-                    backdropFilter: "blur(6px)",
-                    WebkitBackdropFilter: "blur(6px)",
-                    maskImage: "linear-gradient(to top, black 0%, transparent 100%)",
-                    WebkitMaskImage: "linear-gradient(to top, black 0%, transparent 100%)",
-                  }}
+                  style={{ background: "linear-gradient(to top, rgb(9,9,11) 0%, transparent 100%)" }}
                 />
                 {/* bottom bar — fixed on top */}
                 <div className="fixed bottom-0 left-0 right-0 z-20 px-6 py-3 flex items-center justify-center gap-2 text-xs text-white/25">

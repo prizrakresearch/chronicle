@@ -168,7 +168,7 @@ export function ProjectGrid() {
               <Button
                 onClick={() => setImportOpen(true)}
                 size="sm"
-                className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-white/40 border border-white/15 hover:text-white/70 hover:border-white/30 hover:-translate-y-px active:translate-y-0 gap-2 transition duration-200 ease-in-out"
+                className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-purple-400/70 border border-purple-500/30 hover:text-purple-300 hover:border-purple-400/60 hover:bg-purple-500/10 hover:-translate-y-px active:translate-y-0 gap-2 transition duration-200 ease-in-out"
               >
                 <GitBranch className="h-3.5 w-3.5" />
                 Import
@@ -247,7 +247,7 @@ export function ProjectGrid() {
           <div ref={scrollRef} className="flex-1 overflow-hidden">
             <div ref={contentRef} className="px-6 pb-16" style={{ willChange: "transform" }}>
               {loading ? (
-                <div className="rounded-3xl border border-border/50 overflow-hidden bg-black/35 backdrop-blur-sm">
+                <div className="rounded-3xl border border-border/50 overflow-hidden bg-black/35">
                   {Array.from({ length: 4 }).map((_, i) => <ProjectCardSkeleton key={i} />)}
                 </div>
               ) : visible.length === 0 && hiddenProjects.length === 0 ? (

@@ -10,7 +10,7 @@ export function Sidebar() {
   const isDashboard = pathname === "/";
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-[220px] flex flex-col z-40 border-r border-border bg-background/60 backdrop-blur-xl">
+    <aside className="fixed left-0 top-0 h-full w-[220px] flex flex-col z-40 border-r border-border bg-zinc-950">
       {/* Logo */}
       <div className="h-14 flex items-center px-4 border-b border-border shrink-0">
         <Link href="/" className="flex items-center gap-2.5">

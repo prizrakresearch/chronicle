@@ -52,7 +52,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
   const repoShortName = project.githubRepo?.fullName.split("/")[1] ?? null;
 
   return (
-    <div className="group relative flex flex-col rounded-xl border border-border bg-card/80 backdrop-blur-sm hover:border-primary/30 hover:bg-card transition-all duration-150">
+    <div className="group relative flex flex-col rounded-xl border border-border bg-card hover:border-primary/30 transition-all duration-150">
       {/* Main content */}
       <Link href={`/projects/${project.id}`} className="flex-1 p-5 block">
         <div className="flex items-start gap-3">
