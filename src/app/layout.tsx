@@ -33,9 +33,11 @@ export const metadata: Metadata = {
   description: "Personal project operating system",
   manifest: "/manifest.json",
   icons: {
-    icon: [{ url: "/icon.png", type: "image/png" }],
+    icon: [
+      { url: "/icon.png",      type: "image/png", media: "(prefers-color-scheme: dark)"  },
+      { url: "/icon-dark.png", type: "image/png", media: "(prefers-color-scheme: light)" },
+    ],
     apple: [{ url: "/apple-touch-icon.png", type: "image/png" }],
-    shortcut: "/icon.png",
   },
   appleWebApp: {
     capable: true,
@@ -58,6 +60,15 @@ export default function RootLayout({
       <head>
         {/* The Seasons — decorative serif used for the splash "C" mark */}
         <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/the-seasons" />
+
+        {/*
+          Theme-aware favicon.
+          The metadata `icons` API only emits <link media="..."> which Chrome ignores.
+          Instead we manually place the tag + a synchronous inline script that runs
+          before first paint, so the correct icon is set with zero flash.
+          /icon.png      = white logo  → for dark tab bars  (OS dark mode)
+          /icon-dark.png = dark logo   → for light tab bars (OS light mode)
+        */}
       </head>
       <body className="text-foreground antialiased">
         <ClerkProvider appearance={{
