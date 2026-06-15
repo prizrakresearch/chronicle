@@ -109,4 +109,6 @@ export interface ProjectFile {
   createdAt: string; // ISO
   folderId: string | null;
   tags: string[];
+  /** Current version number; 1 = original, 2+ = has history. */
+  versionNumber?: number;
 }

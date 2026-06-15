@@ -4,7 +4,7 @@ import { db } from "@/lib/supabase/server";
 // ── Token ─────────────────────────────────────────────────────────────────────
 
 function getCalendarToken(): string {
-  return process.env.NEXT_PUBLIC_CALENDAR_TOKEN ?? "";
+  return process.env.CALENDAR_TOKEN ?? "";
 }
 
 // ── iCal formatting helpers ───────────────────────────────────────────────────

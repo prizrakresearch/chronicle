@@ -8,6 +8,7 @@ import {
   saveDashboardEvents,
   type DashboardEvent,
 } from "@/lib/db/dashboard";
+import { getCalendarSubscribeUrl } from "@/lib/db/calendar-url";
 
 const DAY_LABELS  = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const MONTH_NAMES = [
@@ -107,10 +108,13 @@ export function CalendarPanel() {
         <div className="flex items-center gap-1">
           {/* Apple Calendar subscribe */}
           <button
-            onClick={() => {
-              const token = process.env.NEXT_PUBLIC_CALENDAR_TOKEN ?? "";
-              const base  = window.location.origin.replace(/^https?/, "webcal");
-              window.location.href = `${base}/api/calendar?token=${encodeURIComponent(token)}`;
+            onClick={async () => {
+              try {
+                const url = await getCalendarSubscribeUrl();
+                window.location.href = url;
+              } catch {
+                // non-owner or not configured — silently ignore
+              }
             }}
             title="Subscribe in Apple Calendar"
             className="w-6 h-6 flex items-center justify-center rounded-full text-white/25 hover:text-white/70 hover:bg-white/8 transition duration-200 ease-in-out"

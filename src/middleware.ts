@@ -8,7 +8,6 @@ const isPublicRoute = createRouteMatcher([
   "/share(.*)",
   "/manifest.json",
   "/api/calendar(.*)",
-  "/api/folders(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

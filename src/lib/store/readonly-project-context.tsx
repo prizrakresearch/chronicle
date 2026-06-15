@@ -45,7 +45,7 @@ interface ProjectsContextValue {
   projectFiles:      ProjectFile[];
   getProjectFiles:   (projectId: string) => ProjectFile[];
   addProjectFile:    (data: Omit<ProjectFile, "id">) => ProjectFile;
-  uploadFile:        (file: File, projectId: string) => Promise<void>;
+  uploadFile:        (file: File, projectId: string, onProgress?: (pct: number) => void, options?: { versionOf?: string; overrideName?: string }) => Promise<void>;
   deleteProjectFile: (id: string) => void;
 
   pin:      string | null;
@@ -55,11 +55,12 @@ interface ProjectsContextValue {
   isReadOnly:      boolean;
   hasGithubToken:  boolean;
 
-  saveGithubToken:  (rawToken: string) => Promise<void>;
-  clearGithubToken: () => Promise<void>;
-  linkRepo:         (projectId: string, fullName: string) => Promise<void>;
-  unlinkRepo:       (projectId: string) => Promise<void>;
-  syncRepo:         (projectId: string) => Promise<void>;
+  saveGithubToken:    (rawToken: string) => Promise<void>;
+  clearGithubToken:   () => Promise<void>;
+  linkRepo:           (projectId: string, fullName: string) => Promise<void>;
+  unlinkRepo:         (projectId: string) => Promise<void>;
+  syncRepo:           (projectId: string) => Promise<void>;
+  reloadProjectFiles: () => Promise<void>;
 }
 
 interface Props {
@@ -121,7 +122,8 @@ export function ReadOnlyProjectsProvider({
     clearGithubToken: asyncNoop,
     linkRepo:         asyncNoop,
     unlinkRepo:       asyncNoop,
-    syncRepo:         asyncNoop,
+    syncRepo:           asyncNoop,
+    reloadProjectFiles: asyncNoop,
   }), [project, roadmapItems, timelineEvents, links, projectFiles]);
 
   return (

@@ -51,9 +51,12 @@ export async function getPublicProject(id: string): Promise<PublicProjectData | 
     try { row.logo_url = await getDownloadUrl(row.logo_s3_key, 3600); } catch { /* ok */ }
   }
 
-  // Resolve project file storage paths → presigned GET URLs
+  // Resolve project file storage paths → presigned GET URLs.
+  // Filter soft-deleted files so trashed items don't appear on the share page.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const projectFiles: ProjectFile[] = await Promise.all((row.project_files ?? []).map(async (f: any) => {
+  const activeFiles = (row.project_files ?? []).filter((f: any) => !f.deleted_at);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const projectFiles: ProjectFile[] = await Promise.all(activeFiles.map(async (f: any) => {
     let dataUrl = "";
     try { dataUrl = await getDownloadUrl(f.storage_path, 3600); } catch { /* ok */ }
     return {

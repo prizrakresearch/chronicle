@@ -6,8 +6,13 @@ import {
   Image, Video, Music, Archive, Code2, File,
   Copy, Check, Trash2, ExternalLink, Download,
   FolderPlus, FolderOpen, ChevronRight, X, Hash,
-  LayoutList, LayoutGrid, Maximize2, Minimize2, KeyRound, CheckCircle2, Pencil,
+  LayoutList, LayoutGrid, Maximize2, Minimize2, KeyRound, CheckCircle2, Pencil, Eye, Activity,
 } from "lucide-react";
+import { FilePreview } from "./file-preview";
+import { TrashPanel  } from "./trash-panel";
+import { DocThumbnail, isDocPreviewType } from "./doc-thumbnail";
+import { ActivityPanel } from "./activity-panel";
+import { VersionConflictDialog, dupName } from "./version-conflict-dialog";
 import { AddLinkDialog } from "@/components/links/add-link-dialog";
 import { GitSidebar } from "./git-sidebar";
 import { CommitsPanel } from "./commits-panel";
@@ -18,10 +23,11 @@ import type { Project, ProjectLink, ProjectFile } from "@/types";
 import type { RepoBranch, RepoCommit } from "@/lib/db/github";
 import { createPortal } from "react-dom";
 import {
-  createFolder  as dbCreateFolder,
-  renameFolder  as dbRenameFolder,
-  updateProjectFile as dbUpdateFile,
-  updateLink    as dbUpdateLink,
+  createFolder        as dbCreateFolder,
+  renameFolder        as dbRenameFolder,
+  updateProjectFile   as dbUpdateFile,
+  updateLink          as dbUpdateLink,
+  checkFilenameConflict,
 } from "@/lib/db/files";
 
 // ── Icon / colour helpers ─────────────────────────────────────────────────────
@@ -54,6 +60,12 @@ function fmtSize(b: number) {
 }
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+function fmtBytes(b: number) {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
+  return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
 // ── Tag colours ───────────────────────────────────────────────────────────────
@@ -165,7 +177,7 @@ type ItemType = { kind: "link"; link: ProjectLink } | { kind: "file"; file: Proj
 
 // ── List row ──────────────────────────────────────────────────────────────────
 
-function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onDeleteFile, isReadOnly, isDragging, onItemDragStart, onItemDragEnd, isSelected, showCheckbox, onToggleSelect }: {
+function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onDeleteFile, isReadOnly, isDragging, onItemDragStart, onItemDragEnd, isSelected, showCheckbox, onToggleSelect, onPreviewFile }: {
   item: ItemType; meta: ItemMeta; folders: { id: string; name: string }[];
   allTags: string[]; onMetaChange: (m: Partial<ItemMeta>) => void;
   onDeleteLink: (id: string) => void; onDeleteFile: (id: string) => void;
@@ -176,6 +188,7 @@ function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onD
   isSelected?:      boolean;
   showCheckbox?:    boolean;
   onToggleSelect?:  (id: string, e: React.MouseEvent) => void;
+  onPreviewFile?:   (id: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const id        = item.kind === "link" ? item.link.id : item.file.id;
@@ -231,12 +244,36 @@ function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onD
             {isSelected && <Check className="h-2.5 w-2.5 text-black" />}
           </button>
         )}
-        <div className="w-8 h-8 rounded-xl bg-white/[0.06] flex items-center justify-center shrink-0">
-          <Icon className={cn("h-4 w-4", iconCls)} />
+        <div className="w-8 h-8 rounded-xl bg-white/[0.06] flex items-center justify-center shrink-0 overflow-hidden">
+          {item.kind === "file" && item.file.mimeType.startsWith("image/") ? (
+            <img src={item.file.dataUrl} alt={item.file.name} loading="lazy"
+              className="w-full h-full object-cover" />
+          ) : item.kind === "file" && isDocPreviewType(item.file.mimeType) ? (
+            <DocThumbnail
+              fileId={item.file.id}
+              mimeType={item.file.mimeType}
+              url={item.file.dataUrl}
+              size={item.file.size}
+              compact
+            />
+          ) : (
+            <Icon className={cn("h-4 w-4", iconCls)} />
+          )}
         </div>
         <p className="flex-1 min-w-0 text-sm font-medium text-white/80 truncate">{title}</p>
+        {item.kind === "file" && (item.file.versionNumber ?? 1) > 1 && (
+          <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-400/80 border border-violet-500/20 tabular-nums">
+            v{item.file.versionNumber}
+          </span>
+        )}
         <p className="text-xs text-white/25 shrink-0 whitespace-nowrap tabular-nums">{subtitle}</p>
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition duration-150 shrink-0">
+          {item.kind === "file" && onPreviewFile && (
+            <button onClick={() => onPreviewFile(id)}
+              className="h-7 w-7 rounded-full border border-white/10 text-white/30 hover:text-white/70 hover:border-white/20 flex items-center justify-center transition duration-150">
+              <Eye className="h-3 w-3" />
+            </button>
+          )}
           {item.kind === "link" ? (
             <>
               <a href={item.link.url} target="_blank" rel="noopener noreferrer"
@@ -287,48 +324,92 @@ function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onD
 
 // ── Grid card ─────────────────────────────────────────────────────────────────
 
-function ItemCard({ item, meta, onDeleteLink, onDeleteFile, isReadOnly }: {
+function ItemCard({ item, meta, onDeleteLink, onDeleteFile, isReadOnly, onPreviewFile }: {
   item: ItemType; meta: ItemMeta;
   onDeleteLink: (id: string) => void; onDeleteFile: (id: string) => void;
   isReadOnly: boolean;
+  onPreviewFile?: (id: string) => void;
 }) {
   const id       = item.kind === "link" ? item.link.id : item.file.id;
   const Icon     = item.kind === "link" ? LINK_ICONS[item.link.type] : fileIcon(item.file.mimeType);
   const iconCls  = item.kind === "link" ? LINK_COLORS[item.link.type] : fileColor(item.file.mimeType);
   const title    = item.kind === "link" ? item.link.title : item.file.name;
   const subtitle = item.kind === "link" ? item.link.url : fmtSize(item.file.size);
+  const isImage  = item.kind === "file" && item.file.mimeType.startsWith("image/");
+  const isVideo  = item.kind === "file" && item.file.mimeType.startsWith("video/");
+  const isDoc    = item.kind === "file" && isDocPreviewType(item.file.mimeType);
+  const hasThumbnail = isImage || isVideo || isDoc;
+
+  function handleClick() {
+    if (item.kind === "file") onPreviewFile?.(id);
+    else window.open(item.link.url, "_blank", "noopener,noreferrer");
+  }
 
   return (
-    <div className="flex flex-col gap-3 p-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04] transition duration-150 group relative">
-      <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center shrink-0">
-        <Icon className={cn("h-5 w-5", iconCls)} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs font-medium text-white/80 truncate">{title}</p>
-        <p className="text-[10px] text-white/25 truncate mt-0.5">{subtitle}</p>
-      </div>
-      {meta.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {meta.tags.slice(0, 2).map((t, i) => <TagPill key={t} tag={t} colorIdx={i} />)}
-          {meta.tags.length > 2 && <span className="text-[10px] text-white/20">+{meta.tags.length - 2}</span>}
+    <div
+      onClick={handleClick}
+      className="flex flex-col rounded-2xl border border-white/[0.06] bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04] transition duration-150 group relative overflow-hidden cursor-pointer"
+    >
+      {/* Thumbnail area */}
+      {hasThumbnail ? (
+        <div className="w-full aspect-[4/3] bg-white/[0.04] overflow-hidden">
+          {isDoc ? (
+            <DocThumbnail
+              fileId={item.file.id}
+              mimeType={item.file.mimeType}
+              url={item.file.dataUrl}
+              size={item.file.size}
+            />
+          ) : (
+            <img src={item.file.dataUrl} alt={item.file.name} loading="lazy"
+              className="w-full h-full object-cover" />
+          )}
+        </div>
+      ) : (
+        <div className="p-4 pb-2">
+          <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center shrink-0">
+            <Icon className={cn("h-5 w-5", iconCls)} />
+          </div>
         </div>
       )}
+
+      <div className="p-3 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <p className="text-xs font-medium text-white/80 truncate flex-1 min-w-0">{title}</p>
+          {item.kind === "file" && (item.file.versionNumber ?? 1) > 1 && (
+            <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-400/80 border border-violet-500/20">
+              v{item.file.versionNumber}
+            </span>
+          )}
+        </div>
+        <p className="text-[10px] text-white/25 truncate mt-0.5">{subtitle}</p>
+        {meta.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {meta.tags.slice(0, 2).map((t, i) => <TagPill key={t} tag={t} colorIdx={i} />)}
+            {meta.tags.length > 2 && <span className="text-[10px] text-white/20">+{meta.tags.length - 2}</span>}
+          </div>
+        )}
+      </div>
+
       {/* Hover actions */}
-      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition duration-150">
+      <div
+        className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition duration-150"
+        onClick={(e) => e.stopPropagation()}
+      >
         {item.kind === "link" ? (
           <a href={item.link.url} target="_blank" rel="noopener noreferrer"
-            className="h-6 w-6 rounded-full border border-white/10 text-white/30 hover:text-white/70 hover:border-white/20 flex items-center justify-center transition duration-150">
+            className="h-6 w-6 rounded-full border border-white/10 bg-black/50 backdrop-blur-sm text-white/40 hover:text-white/80 hover:border-white/25 flex items-center justify-center transition duration-150">
             <ExternalLink className="h-2.5 w-2.5" />
           </a>
         ) : (
           <button onClick={() => window.open(item.file.dataUrl, "_blank")}
-            className="h-6 w-6 rounded-full border border-white/10 text-white/30 hover:text-white/70 hover:border-white/20 flex items-center justify-center transition duration-150">
+            className="h-6 w-6 rounded-full border border-white/10 bg-black/50 backdrop-blur-sm text-white/40 hover:text-white/80 hover:border-white/25 flex items-center justify-center transition duration-150">
             <ExternalLink className="h-2.5 w-2.5" />
           </button>
         )}
         {!isReadOnly && (
           <button onClick={() => item.kind === "link" ? onDeleteLink(id) : onDeleteFile(id)}
-            className="h-6 w-6 rounded-full border border-red-500/10 text-red-400/30 hover:text-red-400/80 hover:border-red-500/30 hover:bg-red-500/5 flex items-center justify-center transition duration-150">
+            className="h-6 w-6 rounded-full border border-red-500/10 bg-black/50 backdrop-blur-sm text-red-400/40 hover:text-red-400/90 hover:border-red-500/30 hover:bg-red-500/10 flex items-center justify-center transition duration-150">
             <Trash2 className="h-2.5 w-2.5" />
           </button>
         )}
@@ -449,11 +530,13 @@ interface FilesPanelProps {
   onRenameFolder:     (id: string, name: string) => void;
   onDeleteFolder:     (id: string) => void;
   onMetaChange:       (id: string, m: Partial<ItemMeta>) => void;
-  showCredentials:    boolean;
+  showCredentials:     boolean;
   onToggleCredentials: () => void;
+  onToggleTrash:       () => void;
+  onToggleActivity:    () => void;
 }
 
-function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onRenameFolder, onDeleteFolder, onMetaChange, showCredentials, onToggleCredentials }: FilesPanelProps) {
+function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onRenameFolder, onDeleteFolder, onMetaChange, showCredentials, onToggleCredentials, onToggleTrash, onToggleActivity }: FilesPanelProps) {
   const { getLinks, getProjectFiles, uploadFile, deleteLink, deleteProjectFile, isReadOnly } = useProjects();
   const [addLinkOpen,      setAddLinkOpen]  = useState(false);
   const [dragOver,         setDragOver]     = useState(false);
@@ -471,10 +554,15 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onRenam
   const [zippingFolderId,  setZippingFolderId]  = useState<string | null>(null);
   const [folderCtxMenu,    setFolderCtxMenu]    = useState<FolderCtxMenu | null>(null);
   const [listDragOver,     setListDragOver]     = useState(false);
+  const [previewFileId,    setPreviewFileId]    = useState<string | null>(null);
   const [selectedIds,      setSelectedIds]      = useState<Set<string>>(new Set());
   const [bulkMoveOpen,     setBulkMoveOpen]     = useState(false);
   const [isBulkDownloading,setIsBulkDownloading]= useState(false);
   const anchorId = useRef<string | null>(null);
+  const [conflictState, setConflictState] = useState<{
+    fileName: string;
+    resolve: (choice: "version" | "duplicate" | "cancel") => void;
+  } | null>(null);
 
   // Per-file upload progress: key → { name, progress 0-100, done }
   interface UploadItem { name: string; progress: number; done: boolean }
@@ -576,16 +664,36 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onRenam
     });
 
     try {
-      await Promise.all(arr.map((f, i) =>
-        uploadFile(f, projectId, (pct) => setItem(keys[i], { progress: pct }))
-          .then(() => {
-            setItem(keys[i], { progress: 100, done: true });
-            // Remove entry after a short pause so the user sees the ✓
-            setTimeout(() => setUploadQueue(prev => { const n = new Map(prev); n.delete(keys[i]); return n; }), 2500);
-          })
-      ));
-    } catch (err) {
-      console.error("[files-view] upload failed:", err);
+      // Process sequentially so conflict dialogs appear one at a time
+      for (let i = 0; i < arr.length; i++) {
+        const f = arr[i];
+        let opts: { versionOf?: string; overrideName?: string } | undefined;
+
+        // Check for filename conflict before uploading
+        const conflict = await checkFilenameConflict(projectId, f.name);
+        if (conflict) {
+          const choice = await new Promise<"version" | "duplicate" | "cancel">((resolve) => {
+            setConflictState({ fileName: f.name, resolve });
+          });
+          setConflictState(null);
+
+          if (choice === "cancel") {
+            setUploadQueue(prev => { const n = new Map(prev); n.delete(keys[i]); return n; });
+            continue;
+          }
+          if (choice === "version")   opts = { versionOf: conflict.id };
+          if (choice === "duplicate") opts = { overrideName: dupName(f.name) };
+        }
+
+        try {
+          await uploadFile(f, projectId, (pct) => setItem(keys[i], { progress: pct }), opts);
+          setItem(keys[i], { progress: 100, done: true });
+          setTimeout(() => setUploadQueue(prev => { const n = new Map(prev); n.delete(keys[i]); return n; }), 2500);
+        } catch (err) {
+          console.error("[files-view] upload failed:", err);
+          setUploadQueue(prev => { const n = new Map(prev); n.delete(keys[i]); return n; });
+        }
+      }
     } finally {
       setUploading(false);
     }
@@ -702,6 +810,18 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onRenam
             >
               <KeyRound className="h-3.5 w-3.5" />Credentials
             </button>
+            <button
+              onClick={onToggleTrash}
+              className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-red-400/70 hover:border-red-500/30 hover:bg-red-500/5 flex items-center gap-1.5 transition duration-200 hover:-translate-y-px active:translate-y-0"
+            >
+              <Trash2 className="h-3.5 w-3.5" />Trash
+            </button>
+            <button
+              onClick={onToggleActivity}
+              className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 flex items-center gap-1.5 transition duration-200 hover:-translate-y-px active:translate-y-0"
+            >
+              <Activity className="h-3.5 w-3.5" />Activity
+            </button>
             <input ref={fileInputRef} type="file" multiple className="sr-only"
               onChange={e => { if (e.target.files) ingestFiles(e.target.files); e.target.value = ""; }} />
           </>
@@ -714,6 +834,7 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onRenam
               {links.length > 0 && `${links.length} link${links.length !== 1 ? "s" : ""}`}
               {links.length > 0 && files.length > 0 && " · "}
               {files.length > 0 && `${files.length} file${files.length !== 1 ? "s" : ""}`}
+              {files.length > 0 && ` · ${fmtBytes(files.reduce((s, f) => s + f.size, 0))}`}
             </span>
           )}
           <button
@@ -798,7 +919,8 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onRenam
               const id = item.kind === "link" ? item.link.id : item.file.id;
               return (
                 <ItemCard key={id} item={item} meta={getMeta(id)}
-                  onDeleteLink={deleteLink} onDeleteFile={deleteProjectFile} isReadOnly={isReadOnly} />
+                  onDeleteLink={deleteLink} onDeleteFile={deleteProjectFile} isReadOnly={isReadOnly}
+                  onPreviewFile={setPreviewFileId} />
               );
             })}
           </div>
@@ -931,6 +1053,7 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onRenam
                           isSelected={selectedIds.has(id)}
                           showCheckbox={selectedIds.size > 0}
                           onToggleSelect={handleToggleSelect}
+                          onPreviewFile={setPreviewFileId}
                         />
                       );
                     })}
@@ -988,6 +1111,7 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onRenam
                       isSelected={selectedIds.has(id)}
                       showCheckbox={selectedIds.size > 0}
                       onToggleSelect={handleToggleSelect}
+                      onPreviewFile={setPreviewFileId}
                     />
                   );
                 })}
@@ -1117,6 +1241,27 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onRenam
         </div>,
         document.body,
       )}
+
+      {/* File preview modal */}
+      {previewFileId && (() => {
+        const previewFile = files.find(f => f.id === previewFileId);
+        if (!previewFile) return null;
+        return (
+          <FilePreview
+            file={previewFile}
+            allFiles={files}
+            onClose={() => setPreviewFileId(null)}
+          />
+        );
+      })()}
+
+      {/* Version conflict dialog */}
+      {conflictState && (
+        <VersionConflictDialog
+          fileName={conflictState.fileName}
+          onResolve={conflictState.resolve}
+        />
+      )}
     </div>
   );
 
@@ -1157,7 +1302,9 @@ export function FilesView({ projectId, project, initialBranches, initialContribs
   const [folders,        setFolders]        = useState<{ id: string; name: string }[]>([]);
   const [itemMeta,       setItemMeta]       = useState<Record<string, ItemMeta>>({});
   const [commitsFullscreen,  setCommitsFullscreen]  = useState(false);
-  const [showCredentials,   setShowCredentials]   = useState(false);
+  const [showCredentials,    setShowCredentials]    = useState(false);
+  const [showTrash,          setShowTrash]          = useState(false);
+  const [showActivity,       setShowActivity]       = useState(false);
 
   // ── Load folders from DB on mount ──────────────────────────────────────────
   useEffect(() => {
@@ -1281,11 +1428,10 @@ export function FilesView({ projectId, project, initialBranches, initialContribs
         )}
       </div>
 
-      {/* ── Right: Files panel or Credentials (~45%) ── */}
+      {/* ── Right: Files panel, Credentials, or Trash (~45%) ── */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden pl-4">
         {showCredentials ? (
           <>
-            {/* Credentials toolbar stub — keeps the button visible to toggle back */}
             <div className="flex items-center gap-2 mb-3 shrink-0">
               <button
                 onClick={() => setShowCredentials(false)}
@@ -1296,6 +1442,34 @@ export function FilesView({ projectId, project, initialBranches, initialContribs
             </div>
             <div className="flex-1 min-h-0 overflow-hidden">
               <CredentialsPanel project={project} />
+            </div>
+          </>
+        ) : showTrash ? (
+          <>
+            <div className="flex items-center gap-2 mb-3 shrink-0">
+              <button
+                onClick={() => setShowTrash(false)}
+                className="h-9 px-4 text-xs font-semibold rounded-full border border-red-500/30 text-red-400/70 bg-red-500/8 flex items-center gap-1.5 transition duration-200"
+              >
+                <Trash2 className="h-3.5 w-3.5" />Trash
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+              <TrashPanel projectId={projectId} />
+            </div>
+          </>
+        ) : showActivity ? (
+          <>
+            <div className="flex items-center gap-2 mb-3 shrink-0">
+              <button
+                onClick={() => setShowActivity(false)}
+                className="h-9 px-4 text-xs font-semibold rounded-full border border-primary/40 text-primary/75 bg-primary/10 flex items-center gap-1.5 transition duration-200"
+              >
+                <Activity className="h-3.5 w-3.5" />Activity
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+              <ActivityPanel projectId={projectId} />
             </div>
           </>
         ) : (
@@ -1309,6 +1483,8 @@ export function FilesView({ projectId, project, initialBranches, initialContribs
             onMetaChange={updateMeta}
             showCredentials={showCredentials}
             onToggleCredentials={() => setShowCredentials(true)}
+            onToggleTrash={() => setShowTrash(true)}
+            onToggleActivity={() => setShowActivity(true)}
           />
         )}
       </div>

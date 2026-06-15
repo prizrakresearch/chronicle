@@ -35,6 +35,7 @@ import {
   deleteCalendarEvent,
   requestUploadUrl,
   saveProjectFile,
+  saveAsNewVersion         as dbSaveAsNewVersion,
   getFileUrl,
   getProjectFilesWithUrls,
   deleteProjectFile        as dbDeleteProjectFile,
@@ -80,8 +81,14 @@ interface ProjectsContextValue {
   getProjectFiles:   (projectId: string) => ProjectFile[];
   addProjectFile:    (data: Omit<ProjectFile, "id">) => ProjectFile;
   /** Upload a native File to S3, save metadata, update context. */
-  uploadFile:        (file: File, projectId: string, onProgress?: (pct: number) => void) => Promise<void>;
-  deleteProjectFile: (id: string) => void;
+  uploadFile: (
+    file: File,
+    projectId: string,
+    onProgress?: (pct: number) => void,
+    options?: { versionOf?: string; overrideName?: string },
+  ) => Promise<void>;
+  deleteProjectFile:    (id: string) => void;
+  reloadProjectFiles:   () => Promise<void>;
 
   pin:      string | null;
   setPin:   (pin: string) => void;
@@ -157,6 +164,26 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
           for (const lk of r.project_links   ?? []) loadedLinks.push(toProjectLink(lk));
         }
 
+        // Decrypt credential pairs for the owner before storing in state.
+        // Guests don't have the secret and can't decrypt — their view of
+        // credentials is intentionally empty in the UI anyway.
+        if (!isReadOnly) {
+          try {
+            const [{ getCredentialSecret }, { decryptPairs }] = await Promise.all([
+              import("@/lib/db/credential-secret"),
+              import("@/lib/crypto/credentials"),
+            ]);
+            const secret = await getCredentialSecret();
+            for (const project of loadedProjects) {
+              for (const cred of project.credentials) {
+                cred.pairs = await decryptPairs(cred.pairs, user.id, secret);
+              }
+            }
+          } catch (err) {
+            console.error("[ProjectsContext] credential decryption failed:", err);
+          }
+        }
+
         setProjects(loadedProjects);
         setRoadmapItems(loadedRoadmap);
         setTimelineEvents(loadedTimeline);
@@ -168,16 +195,17 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
           const filesData = await getProjectFilesWithUrls(projectIds);
           if (!cancelled) {
             setProjectFiles(filesData.map((f) => ({
-              id:         f.id,
-              projectId:  f.project_id,
-              name:       f.name,
-              mimeType:   f.mime_type,
-              size:       f.size,
-              dataUrl:    f.presigned_url,
-              s3Key:      f.storage_path,
-              createdAt:  f.created_at,
-              folderId:   f.folder_id   ?? null,
-              tags:       f.tags        ?? [],
+              id:            f.id,
+              projectId:     f.project_id,
+              name:          f.name,
+              mimeType:      f.mime_type,
+              size:          f.size,
+              dataUrl:       f.presigned_url,
+              s3Key:         f.storage_path,
+              createdAt:     f.created_at,
+              folderId:      f.folder_id   ?? null,
+              tags:          f.tags        ?? [],
+              versionNumber: (f as { version_number?: number }).version_number ?? 1,
             })));
           }
         }
@@ -326,17 +354,37 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       for (const n of diff.changed as MarkdownNote[]) updateMarkdownNote(n.id, id, { title: n.title, content: n.content }).catch(console.error);
     }
 
-    // 5. Credentials diff (dynamic import avoids bundling crypto on every render)
+    // 5. Credentials diff — encrypt pairs before persisting to the server
     if ("credentials" in updates && Array.isArray(updates.credentials)) {
       const diff = diffById<Credential>(current.credentials, updates.credentials as Credential[]);
-      import("@/lib/db/credentials").then(({ createCredential, deleteCredential, updateCredentialTitle, replaceCredentialPairs }) => {
-        for (const c of diff.added   as Credential[]) createCredential({ id: c.id, project_id: id, title: c.title, pairs: c.pairs }).catch(console.error);
-        for (const c of diff.removed)                  deleteCredential(c.id, id).catch(console.error);
-        for (const c of diff.changed as Credential[]) {
-          updateCredentialTitle(c.id, id, c.title).catch(console.error);
-          replaceCredentialPairs(c.id, id, c.pairs).catch(console.error);
+      (async () => {
+        try {
+          const [
+            { createCredential, deleteCredential, updateCredentialTitle, replaceCredentialPairs },
+            { getCredentialSecret },
+            { encryptPairs },
+          ] = await Promise.all([
+            import("@/lib/db/credentials"),
+            import("@/lib/db/credential-secret"),
+            import("@/lib/crypto/credentials"),
+          ]);
+          const secret  = await getCredentialSecret();
+          const ownerId = user?.id ?? "";
+
+          for (const c of diff.added as Credential[]) {
+            const encrypted = await encryptPairs(c.pairs, ownerId, secret);
+            createCredential({ id: c.id, project_id: id, title: c.title, pairs: encrypted }).catch(console.error);
+          }
+          for (const c of diff.removed) deleteCredential(c.id, id).catch(console.error);
+          for (const c of diff.changed as Credential[]) {
+            updateCredentialTitle(c.id, id, c.title).catch(console.error);
+            const encrypted = await encryptPairs(c.pairs, ownerId, secret);
+            replaceCredentialPairs(c.id, id, encrypted).catch(console.error);
+          }
+        } catch (err) {
+          console.error("[ProjectsContext] credential encryption failed:", err);
         }
-      });
+      })();
     }
   }, []);
 
@@ -504,17 +552,23 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
    * Full S3 upload flow:
    *  1. Get presigned PUT URL from server
    *  2. PUT file bytes directly to S3 from the browser
-   *  3. Save metadata to Supabase
+   *  3. Save metadata (new file) or archive old version (versionOf)
    *  4. Get presigned GET URL
-   *  5. Add to local state
+   *  5. Update local state
    */
-  const uploadFile = useCallback(async (file: File, projectId: string, onProgress?: (pct: number) => void): Promise<void> => {
+  const uploadFile = useCallback(async (
+    file: File,
+    projectId: string,
+    onProgress?: (pct: number) => void,
+    options?: { versionOf?: string; overrideName?: string },
+  ): Promise<void> => {
+    const filename = options?.overrideName ?? file.name;
     const mimeType = file.type || "application/octet-stream";
 
     // 1 — Presigned PUT URL
     const { uploadUrl, s3Key } = await requestUploadUrl({
       project_id: projectId,
-      filename:   file.name,
+      filename,
       mime_type:  mimeType,
     });
 
@@ -535,41 +589,65 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       xhr.send(file);
     });
 
-    // 3 — Persist metadata in Supabase
-    const saved = await saveProjectFile({
-      project_id: projectId,
-      name:       file.name,
-      mime_type:  mimeType,
-      size:       file.size,
-      s3_key:     s3Key,
-    });
-
     // 4 — Get a short-lived download URL so the file is immediately viewable
     const downloadUrl = await getFileUrl(s3Key);
 
-    // 5 — Update local state (uses real Supabase-generated ID)
-    setProjectFiles((prev) => [{
-      id:        saved.id,
-      projectId,
-      name:      file.name,
-      mimeType,
-      size:      file.size,
-      dataUrl:   downloadUrl,
-      s3Key,
-      createdAt: saved.created_at,
-      folderId:  null,
-      tags:      [],
-    }, ...prev]);
+    if (options?.versionOf) {
+      // 3a — Archive old version, update existing file record
+      const newVersion = await dbSaveAsNewVersion(options.versionOf, projectId, s3Key, file.size);
+      setProjectFiles((prev) => prev.map((f) =>
+        f.id === options.versionOf
+          ? { ...f, dataUrl: downloadUrl, s3Key, size: file.size, versionNumber: newVersion }
+          : f,
+      ));
+    } else {
+      // 3b — Persist as a new file
+      const saved = await saveProjectFile({
+        project_id: projectId,
+        name:       filename,
+        mime_type:  mimeType,
+        size:       file.size,
+        s3_key:     s3Key,
+      });
+      // 5 — Update local state (uses real Supabase-generated ID)
+      setProjectFiles((prev) => [{
+        id:            saved.id,
+        projectId,
+        name:          filename,
+        mimeType,
+        size:          file.size,
+        dataUrl:       downloadUrl,
+        s3Key,
+        createdAt:     saved.created_at,
+        folderId:      null,
+        tags:          [],
+        versionNumber: 1,
+      }, ...prev]);
+    }
   }, []);
 
   const deleteProjectFile = useCallback((id: string) => {
     const file = projectFiles.find((f) => f.id === id);
     setProjectFiles((prev) => prev.filter((f) => f.id !== id));
-    if (file?.s3Key) {
-      // Delete from both S3 and Supabase
-      dbDeleteProjectFile(id, file.projectId, file.s3Key).catch(console.error);
-    }
+    if (file) dbDeleteProjectFile(id, file.projectId).catch(console.error);
   }, [projectFiles]);
+
+  const reloadProjectFiles = useCallback(async () => {
+    const pIds = projectsRef.current.map((p) => p.id);
+    if (!pIds.length) return;
+    try {
+      const filesData = await getProjectFilesWithUrls(pIds);
+      setProjectFiles(filesData.map((f) => ({
+        id: f.id, projectId: f.project_id, name: f.name,
+        mimeType: f.mime_type, size: f.size, dataUrl: f.presigned_url,
+        s3Key: f.storage_path, createdAt: f.created_at,
+        folderId: f.folder_id ?? null, tags: f.tags ?? [],
+        versionNumber: (f as { version_number?: number }).version_number ?? 1,
+      })));
+    } catch (err) {
+      console.error("[ProjectsContext] reloadProjectFiles failed:", err);
+    }
+  }, []);
 
   // ── GitHub mutations ──────────────────────────────────────────────────────────
 
@@ -632,6 +710,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         addProjectFile,
         uploadFile,
         deleteProjectFile,
+        reloadProjectFiles,
         pin,
         setPin,
         clearPin,

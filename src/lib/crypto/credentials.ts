@@ -1,19 +1,25 @@
 /**
- * AES-256-GCM encryption for credential values.
+ * AES-256-GCM encryption for credential pair values.
  *
- * Encrypt before sending to the server; decrypt after fetching.
- * The key is derived from:
- *   - ownerClerkId   — unique per user, available client-side
- *   - CREDENTIAL_SECRET — server secret in .env.local, passed to the
- *     client only during the derivation step (never exposed raw)
+ * Design:
+ *   - Every call to encryptValue generates a fresh 16-byte PBKDF2 salt AND a
+ *     fresh 12-byte AES-GCM IV, so two encryptions of the same plaintext
+ *     produce completely different ciphertexts.
+ *   - The AES key is derived from (ownerClerkId + CREDENTIAL_SECRET) using
+ *     that per-value salt, meaning there is no shared key across values.
+ *   - CREDENTIAL_SECRET is a server-only env var returned to the owner by a
+ *     server action — it never appears in the JS bundle.
  *
- * Storage format (base64-encoded, comma-separated):
- *   "<iv_base64>,<ciphertext_base64>"
+ * Storage format (base64 values):
+ *   "v2:<salt_b64>:<iv_b64>,<cipher_b64>"
+ *
+ * Legacy: any stored value that does NOT start with "v2:" was never encrypted
+ * (plaintext from before this was wired up). decryptValue passes it through
+ * as-is so the UI keeps working; it will be re-encrypted on the next save.
  */
 
-const ALGO = "AES-GCM";
-const KEY_ALGO = "AES-CBC"; // used for PBKDF2 → AES-GCM wrapping
-const ITERATIONS = 100_000;
+const ALGO       = "AES-GCM";
+const ITERATIONS = 210_000; // OWASP 2024 recommendation for PBKDF2-SHA-256
 
 function b64ToBytes(b64: string): Uint8Array {
   return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -23,80 +29,105 @@ function bytesToB64(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes));
 }
 
-/**
- * Derive a CryptoKey from the owner ID + server secret.
- * Call this once per session and cache the result.
- */
-export async function deriveKey(ownerClerkId: string, serverSecret: string): Promise<CryptoKey> {
-  const enc     = new TextEncoder();
-  const keyMat  = await crypto.subtle.importKey(
+async function deriveKeyWithSalt(
+  ownerClerkId: string,
+  serverSecret: string,
+  salt: Uint8Array,
+): Promise<CryptoKey> {
+  const enc    = new TextEncoder();
+  const keyMat = await crypto.subtle.importKey(
     "raw",
     enc.encode(ownerClerkId + "|" + serverSecret),
     { name: "PBKDF2" },
     false,
-    ["deriveKey"]
+    ["deriveKey"],
   );
   return crypto.subtle.deriveKey(
-    {
-      name:       "PBKDF2",
-      salt:       enc.encode("chronicle-credentials-v1"),
-      iterations: ITERATIONS,
-      hash:       "SHA-256",
-    },
+    { name: "PBKDF2", salt: salt as unknown as BufferSource, iterations: ITERATIONS, hash: "SHA-256" },
     keyMat,
     { name: ALGO, length: 256 },
     false,
-    ["encrypt", "decrypt"]
+    ["encrypt", "decrypt"],
   );
 }
 
-/** Encrypt a plaintext value. Returns "<iv_b64>,<cipher_b64>". */
-export async function encryptValue(plaintext: string, key: CryptoKey): Promise<string> {
-  const iv     = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV for GCM
-  const enc    = new TextEncoder();
+/**
+ * Encrypt a single value. Returns "v2:<salt_b64>:<iv_b64>,<cipher_b64>".
+ * Generates a fresh random salt and IV on every call.
+ */
+export async function encryptValue(
+  plaintext:     string,
+  ownerClerkId:  string,
+  serverSecret:  string,
+): Promise<string> {
+  const salt   = crypto.getRandomValues(new Uint8Array(16));
+  const iv     = crypto.getRandomValues(new Uint8Array(12));
+  const key    = await deriveKeyWithSalt(ownerClerkId, serverSecret, salt);
   const cipher = await crypto.subtle.encrypt(
     { name: ALGO, iv },
     key,
-    enc.encode(plaintext)
+    new TextEncoder().encode(plaintext),
   );
-  return `${bytesToB64(iv)},${bytesToB64(new Uint8Array(cipher))}`;
+  return `v2:${bytesToB64(salt)}:${bytesToB64(iv)},${bytesToB64(new Uint8Array(cipher))}`;
 }
 
-/** Decrypt a value produced by encryptValue. Returns the original plaintext. */
-export async function decryptValue(stored: string, key: CryptoKey): Promise<string> {
-  const [ivB64, cipherB64] = stored.split(",");
-  if (!ivB64 || !cipherB64) throw new Error("Invalid encrypted value format");
+/**
+ * Decrypt a value produced by encryptValue.
+ * Legacy plaintext values (no "v2:" prefix) are passed through unchanged
+ * so existing unencrypted credentials keep displaying until re-saved.
+ */
+export async function decryptValue(
+  stored:        string,
+  ownerClerkId:  string,
+  serverSecret:  string,
+): Promise<string> {
+  if (!stored.startsWith("v2:")) return stored; // legacy plaintext — pass through
 
+  const rest    = stored.slice(3);              // strip "v2:"
+  const colon   = rest.indexOf(":");
+  if (colon === -1) throw new Error("Invalid encrypted format");
+
+  const saltB64 = rest.slice(0, colon);
+  const rest2   = rest.slice(colon + 1);
+  const comma   = rest2.indexOf(",");
+  if (comma === -1) throw new Error("Invalid encrypted format");
+
+  const ivB64     = rest2.slice(0, comma);
+  const cipherB64 = rest2.slice(comma + 1);
+
+  const key   = await deriveKeyWithSalt(ownerClerkId, serverSecret, b64ToBytes(saltB64));
   const plain = await crypto.subtle.decrypt(
     { name: ALGO, iv: b64ToBytes(ivB64) as unknown as BufferSource },
     key,
-    b64ToBytes(cipherB64) as unknown as BufferSource
+    b64ToBytes(cipherB64) as unknown as BufferSource,
   );
   return new TextDecoder().decode(plain);
 }
 
-/**
- * Convenience: encrypt every value in a pairs array.
- * Pass this before sending credentials to a Server Action.
- */
+/** Encrypt every value in a pairs array before sending to the server. */
 export async function encryptPairs(
-  pairs: { key: string; value: string }[],
-  key: CryptoKey
+  pairs:         { key: string; value: string }[],
+  ownerClerkId:  string,
+  serverSecret:  string,
 ): Promise<{ key: string; value: string }[]> {
   return Promise.all(
-    pairs.map(async (p) => ({ key: p.key, value: await encryptValue(p.value, key) }))
+    pairs.map(async (p) => ({
+      key:   p.key,
+      value: await encryptValue(p.value, ownerClerkId, serverSecret),
+    })),
   );
 }
 
-/**
- * Convenience: decrypt every value in a pairs array.
- * Call this after fetching credentials from the server.
- */
+/** Decrypt every value in a pairs array after receiving from the server. */
 export async function decryptPairs(
-  pairs: { key: string; value: string }[],
-  key: CryptoKey
+  pairs:         { key: string; value: string }[],
+  ownerClerkId:  string,
+  serverSecret:  string,
 ): Promise<{ key: string; value: string }[]> {
   return Promise.all(
-    pairs.map(async (p) => ({ key: p.key, value: await decryptValue(p.value, key) }))
+    pairs.map(async (p) => ({
+      key:   p.key,
+      value: await decryptValue(p.value, ownerClerkId, serverSecret),
+    })),
   );
 }

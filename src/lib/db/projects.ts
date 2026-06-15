@@ -31,9 +31,12 @@ async function requireOwner() {
 }
 
 async function requireAuth() {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) throw new Error("Unauthenticated");
-  return userId;
+  const meta = (sessionClaims?.metadata ?? {}) as { role?: string; expiresAt?: string };
+  if (!meta.role) throw new Error("Forbidden");
+  if (meta.expiresAt && new Date(meta.expiresAt) < new Date()) throw new Error("Forbidden");
+  return { userId, role: meta.role };
 }
 
 // ── Queries ───────────────────────────────────────────────────────────────────
@@ -47,8 +50,10 @@ export async function getProjects() {
   const { userId, sessionClaims } = await auth();
   if (!userId) throw new Error("Unauthenticated");
 
-  const meta     = (sessionClaims?.metadata ?? {}) as { role?: string };
-  const isOwner  = meta.role === "owner";
+  const meta = (sessionClaims?.metadata ?? {}) as { role?: string; expiresAt?: string };
+  if (!meta.role) throw new Error("Forbidden");
+  if (meta.expiresAt && new Date(meta.expiresAt) < new Date()) throw new Error("Forbidden");
+  const isOwner = meta.role === "owner";
 
   const FULL_SELECT = `
     *,
@@ -93,7 +98,19 @@ export async function getProjects() {
 }
 
 export async function getProject(id: string) {
-  const userId = await requireAuth();
+  const { userId, role } = await requireAuth();
+
+  // Guests may only fetch projects they've been explicitly shared on.
+  if (role !== "owner") {
+    const { data: share } = await db
+      .from("project_shares")
+      .select("project_id")
+      .eq("project_id", id)
+      .eq("clerk_user_id", userId)
+      .maybeSingle();
+    if (!share) throw new Error("Forbidden");
+  }
+
   const { data, error } = await db
     .from("projects")
     .select(`

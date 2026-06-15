@@ -17,6 +17,7 @@ async function requireOwner() {
  * The client decrypts each pair.value after receiving them.
  */
 export async function getCredentials(projectId: string) {
+  await requireOwner();
   const { data, error } = await db
     .from("credentials")
     .select("*, credential_pairs (*)")

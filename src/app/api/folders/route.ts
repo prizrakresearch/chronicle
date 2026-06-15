@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/supabase/server";
 
 export async function GET(req: NextRequest) {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+  const { userId, sessionClaims } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+
+  const meta = (sessionClaims?.metadata ?? {}) as { role?: string; expiresAt?: string };
+  if (!meta.role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (meta.expiresAt && new Date(meta.expiresAt) < new Date()) {
+    return NextResponse.json({ error: "Access expired" }, { status: 403 });
+  }
 
   const projectId = req.nextUrl.searchParams.get("projectId");
   if (!projectId) return NextResponse.json({ error: "Missing projectId" }, { status: 400 });
