@@ -80,7 +80,7 @@ interface ProjectsContextValue {
   getProjectFiles:   (projectId: string) => ProjectFile[];
   addProjectFile:    (data: Omit<ProjectFile, "id">) => ProjectFile;
   /** Upload a native File to S3, save metadata, update context. */
-  uploadFile:        (file: File, projectId: string) => Promise<void>;
+  uploadFile:        (file: File, projectId: string, onProgress?: (pct: number) => void) => Promise<void>;
   deleteProjectFile: (id: string) => void;
 
   pin:      string | null;
@@ -506,7 +506,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
    *  4. Get presigned GET URL
    *  5. Add to local state
    */
-  const uploadFile = useCallback(async (file: File, projectId: string): Promise<void> => {
+  const uploadFile = useCallback(async (file: File, projectId: string, onProgress?: (pct: number) => void): Promise<void> => {
     const mimeType = file.type || "application/octet-stream";
 
     // 1 — Presigned PUT URL
@@ -516,13 +516,22 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       mime_type:  mimeType,
     });
 
-    // 2 — Upload bytes straight to S3 (no server round-trip for the data)
-    const putResp = await fetch(uploadUrl, {
-      method:  "PUT",
-      body:    file,
-      headers: { "Content-Type": mimeType },
+    // 2 — Upload bytes straight to S3 via XHR (supports progress events)
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100));
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) { onProgress?.(100); resolve(); }
+        else reject(new Error(`S3 upload failed: ${xhr.status} ${xhr.statusText}`));
+      };
+      xhr.onerror  = () => reject(new Error("Network error during S3 upload"));
+      xhr.onabort  = () => reject(new Error("Upload aborted"));
+      xhr.open("PUT", uploadUrl);
+      xhr.setRequestHeader("Content-Type", mimeType);
+      xhr.send(file);
     });
-    if (!putResp.ok) throw new Error(`S3 upload failed: ${putResp.status} ${putResp.statusText}`);
 
     // 3 — Persist metadata in Supabase
     const saved = await saveProjectFile({

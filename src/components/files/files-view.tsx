@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useCallback } from "react";
 import {
   Plus, Link2, Upload, GitBranch, FileText, Globe, Palette,
   Image, Video, Music, Archive, Code2, File,
   Copy, Check, Trash2, ExternalLink, Download,
   FolderPlus, FolderOpen, ChevronRight, X, Hash,
-  LayoutList, LayoutGrid, Maximize2, Minimize2, KeyRound,
+  LayoutList, LayoutGrid, Maximize2, Minimize2, KeyRound, CheckCircle2,
 } from "lucide-react";
 import { AddLinkDialog } from "@/components/links/add-link-dialog";
 import { GitSidebar } from "./git-sidebar";
@@ -356,6 +356,12 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
   const [draggedItemId,  setDraggedItemId]  = useState<string | null>(null);
   const [folderDragOver, setFolderDragOver] = useState<string | null>(null);
 
+  // Per-file upload progress: key → { name, progress 0-100, done }
+  interface UploadItem { name: string; progress: number; done: boolean }
+  const [uploadQueue, setUploadQueue] = useState<Map<string, UploadItem>>(new Map());
+  const setItem = useCallback((key: string, patch: Partial<UploadItem>) =>
+    setUploadQueue(prev => { const n = new Map(prev); n.set(key, { ...n.get(key)!, ...patch }); return n; }), []);
+
   const links = getLinks(projectId);
   const files = getProjectFiles(projectId);
 
@@ -393,8 +399,24 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
   async function ingestFiles(fileList: FileList | File[]) {
     const arr = Array.from(fileList); if (!arr.length) return;
     setUploading(true);
+
+    // Register each file in the queue with a unique key
+    const keys = arr.map(() => crypto.randomUUID());
+    setUploadQueue(prev => {
+      const n = new Map(prev);
+      arr.forEach((f, i) => n.set(keys[i], { name: f.name, progress: 0, done: false }));
+      return n;
+    });
+
     try {
-      await Promise.all(arr.map((f) => uploadFile(f, projectId)));
+      await Promise.all(arr.map((f, i) =>
+        uploadFile(f, projectId, (pct) => setItem(keys[i], { progress: pct }))
+          .then(() => {
+            setItem(keys[i], { progress: 100, done: true });
+            // Remove entry after a short pause so the user sees the ✓
+            setTimeout(() => setUploadQueue(prev => { const n = new Map(prev); n.delete(keys[i]); return n; }), 2500);
+          })
+      ));
     } catch (err) {
       console.error("[files-view] upload failed:", err);
     } finally {
@@ -658,6 +680,45 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
       )}
 
       <AddLinkDialog projectId={projectId} open={addLinkOpen} onOpenChange={setAddLinkOpen} />
+
+      {/* ── Upload progress panel (Google Drive style) ── */}
+      {uploadQueue.size > 0 && createPortal(
+        <div className="fixed bottom-14 right-5 z-50 w-72 rounded-2xl border border-white/10 bg-[#111] shadow-2xl overflow-hidden">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
+            <span className="text-xs font-semibold text-white/60">
+              {[...uploadQueue.values()].some(u => !u.done)
+                ? `Uploading ${[...uploadQueue.values()].filter(u => !u.done).length} file${[...uploadQueue.values()].filter(u => !u.done).length !== 1 ? "s" : ""}…`
+                : "Upload complete"}
+            </span>
+            <Upload className="h-3.5 w-3.5 text-white/25" />
+          </div>
+          {/* File rows */}
+          <div className="p-3 space-y-3 max-h-52 overflow-y-auto">
+            {[...uploadQueue.entries()].map(([key, item]) => (
+              <div key={key}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="flex-1 text-[11px] text-white/60 truncate">{item.name}</span>
+                  {item.done
+                    ? <CheckCircle2 className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+                    : <span className="text-[10px] text-white/30 shrink-0 tabular-nums">{item.progress}%</span>
+                  }
+                </div>
+                <div className="h-[3px] bg-white/[0.06] rounded-full overflow-hidden">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all duration-200",
+                      item.done ? "bg-primary/60" : "bg-primary/80"
+                    )}
+                    style={{ width: `${item.progress}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 
