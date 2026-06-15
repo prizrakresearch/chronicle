@@ -159,11 +159,14 @@ type ItemType = { kind: "link"; link: ProjectLink } | { kind: "file"; file: Proj
 
 // ── List row ──────────────────────────────────────────────────────────────────
 
-function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onDeleteFile, isReadOnly }: {
+function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onDeleteFile, isReadOnly, isDragging, onItemDragStart, onItemDragEnd }: {
   item: ItemType; meta: ItemMeta; folders: { id: string; name: string }[];
   allTags: string[]; onMetaChange: (m: Partial<ItemMeta>) => void;
   onDeleteLink: (id: string) => void; onDeleteFile: (id: string) => void;
   isReadOnly: boolean;
+  isDragging?:      boolean;
+  onItemDragStart?: (id: string) => void;
+  onItemDragEnd?:   () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const id        = item.kind === "link" ? item.link.id : item.file.id;
@@ -173,7 +176,29 @@ function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onD
   const subtitle  = item.kind === "link" ? item.link.url : `${fmtSize(item.file.size)} · ${fmtDate(item.file.createdAt)}`;
 
   return (
-    <div className="flex flex-col gap-1.5 px-4 py-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04] transition duration-150 group">
+    <div
+      className={cn(
+        "flex flex-col gap-1.5 px-4 py-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04] transition duration-150 group",
+        isDragging && "opacity-40 scale-[0.98]",
+        !isReadOnly && "cursor-grab active:cursor-grabbing",
+      )}
+      draggable={!isReadOnly}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("application/x-chronicle-item", id);
+        e.dataTransfer.effectAllowed = "move";
+        // Let Chrome/Safari drag the file to the desktop via the DownloadURL trick
+        if (item.kind === "file") {
+          try {
+            e.dataTransfer.setData(
+              "DownloadURL",
+              `${item.file.mimeType}:${item.file.name}:${item.file.dataUrl}`,
+            );
+          } catch {}
+        }
+        onItemDragStart?.(id);
+      }}
+      onDragEnd={() => onItemDragEnd?.()}
+    >
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 rounded-xl bg-white/[0.06] flex items-center justify-center shrink-0">
           <Icon className={cn("h-4 w-4", iconCls)} />
@@ -328,6 +353,8 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
   const [fullscreen,       setFullscreen]   = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounter  = useRef(0);
+  const [draggedItemId,  setDraggedItemId]  = useState<string | null>(null);
+  const [folderDragOver, setFolderDragOver] = useState<string | null>(null);
 
   const links = getLinks(projectId);
   const files = getProjectFiles(projectId);
@@ -375,10 +402,12 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
     }
   }
 
-  const handleDragEnter = (e: React.DragEvent) => { e.preventDefault(); dragCounter.current++; setDragOver(true); };
-  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); dragCounter.current--; if (!dragCounter.current) setDragOver(false); };
-  const handleDragOver  = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; };
-  const handleDrop      = (e: React.DragEvent) => { e.preventDefault(); dragCounter.current = 0; setDragOver(false); if (e.dataTransfer.files) ingestFiles(e.dataTransfer.files); };
+  // Only respond to drags coming from outside the browser (files from Finder/Explorer)
+  const isExternalFile  = (e: React.DragEvent) => e.dataTransfer.types.includes("Files") && !e.dataTransfer.types.includes("application/x-chronicle-item");
+  const handleDragEnter = (e: React.DragEvent) => { if (!isExternalFile(e)) return; e.preventDefault(); dragCounter.current++; setDragOver(true); };
+  const handleDragLeave = (e: React.DragEvent) => { if (!isExternalFile(e)) return; e.preventDefault(); dragCounter.current--; if (!dragCounter.current) setDragOver(false); };
+  const handleDragOver  = (e: React.DragEvent) => { if (!isExternalFile(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; };
+  const handleDrop      = (e: React.DragEvent) => { if (!isExternalFile(e)) return; e.preventDefault(); dragCounter.current = 0; setDragOver(false); if (e.dataTransfer.files) ingestFiles(e.dataTransfer.files); };
 
   function getMeta(id: string): ItemMeta { return itemMeta[id] ?? { folderId: null, tags: [] }; }
   function toggleFolder(id: string) { setCollapsed(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; }); }
@@ -525,27 +554,56 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
         /* ── List view ── */
         <div className="flex-1 overflow-y-auto space-y-4 min-h-0 pb-16">
           {folders.map(folder => {
-            const items = folderGroups[folder.id] ?? [];
+            const items    = folderGroups[folder.id] ?? [];
             const collapsed = collapsedFolders.has(folder.id);
+            const isTarget  = folderDragOver === folder.id;
             return (
-              <section key={folder.id}>
+              <section
+                key={folder.id}
+                onDragOver={(e) => {
+                  if (!draggedItemId) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  setFolderDragOver(folder.id);
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) setFolderDragOver(null);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (draggedItemId) { onMetaChange(draggedItemId, { folderId: folder.id }); setDraggedItemId(null); }
+                  setFolderDragOver(null);
+                }}
+              >
                 <button onClick={() => toggleFolder(folder.id)}
-                  className="flex items-center gap-2 text-[11px] font-semibold text-white/40 uppercase tracking-widest mb-2 px-1 hover:text-white/60 transition w-full text-left">
+                  className={cn(
+                    "flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widest mb-2 px-2 py-1 rounded-xl transition w-full text-left",
+                    isTarget
+                      ? "text-primary/80 bg-primary/10 border border-primary/20"
+                      : "text-white/40 hover:text-white/60 border border-transparent"
+                  )}>
                   <ChevronRight className={cn("h-3 w-3 transition-transform duration-150", !collapsed && "rotate-90")} />
                   <FolderOpen className="h-3 w-3" />
                   {folder.name}
                   <span className="ml-1 text-white/20 normal-case font-normal tracking-normal">({items.length})</span>
+                  {isTarget && <span className="ml-auto text-[10px] text-primary/60 normal-case font-normal tracking-normal">Drop to move</span>}
                 </button>
                 {!collapsed && (
                   <div className="space-y-1.5">
                     {items.length === 0 ? (
-                      <p className="text-[11px] text-white/20 px-4 py-2">Empty folder</p>
+                      <p className={cn("text-[11px] px-4 py-2", isTarget ? "text-primary/50" : "text-white/20")}>
+                        {isTarget ? "Release to move here" : "Empty folder"}
+                      </p>
                     ) : items.map(item => {
                       const id = item.kind === "link" ? item.link.id : item.file.id;
                       return (
                         <ItemRow key={id} item={item} meta={getMeta(id)} folders={folders} allTags={allTags}
                           onMetaChange={m => onMetaChange(id, m)}
-                          onDeleteLink={deleteLink} onDeleteFile={deleteProjectFile} isReadOnly={isReadOnly} />
+                          onDeleteLink={deleteLink} onDeleteFile={deleteProjectFile} isReadOnly={isReadOnly}
+                          isDragging={draggedItemId === id}
+                          onItemDragStart={setDraggedItemId}
+                          onItemDragEnd={() => { setDraggedItemId(null); setFolderDragOver(null); }}
+                        />
                       );
                     })}
                   </div>
@@ -554,9 +612,31 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
             );
           })}
           {folderGroups.__root__.length > 0 && (
-            <section>
+            <section
+              onDragOver={(e) => {
+                if (!draggedItemId) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                setFolderDragOver("__root__");
+              }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) setFolderDragOver(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (draggedItemId) { onMetaChange(draggedItemId, { folderId: null }); setDraggedItemId(null); }
+                setFolderDragOver(null);
+              }}
+            >
               {folders.length > 0 && (
-                <p className="text-[11px] font-semibold text-white/25 uppercase tracking-widest mb-2 px-1">Unfoldered</p>
+                <p className={cn(
+                  "text-[11px] font-semibold uppercase tracking-widest mb-2 px-2 py-1 rounded-xl border transition",
+                  folderDragOver === "__root__"
+                    ? "text-primary/80 bg-primary/10 border-primary/20"
+                    : "text-white/25 border-transparent"
+                )}>
+                  {folderDragOver === "__root__" ? "Drop to unfolder" : "Unfoldered"}
+                </p>
               )}
               <div className="space-y-1.5">
                 {folderGroups.__root__.map(item => {
@@ -564,7 +644,11 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
                   return (
                     <ItemRow key={id} item={item} meta={getMeta(id)} folders={folders} allTags={allTags}
                       onMetaChange={m => onMetaChange(id, m)}
-                      onDeleteLink={deleteLink} onDeleteFile={deleteProjectFile} isReadOnly={isReadOnly} />
+                      onDeleteLink={deleteLink} onDeleteFile={deleteProjectFile} isReadOnly={isReadOnly}
+                      isDragging={draggedItemId === id}
+                      onItemDragStart={setDraggedItemId}
+                      onItemDragEnd={() => { setDraggedItemId(null); setFolderDragOver(null); }}
+                    />
                   );
                 })}
               </div>

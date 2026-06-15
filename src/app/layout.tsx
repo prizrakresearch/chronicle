@@ -7,6 +7,7 @@ import { ClientBackground } from "@/components/layout/client-background";
 import { ProjectsProvider } from "@/lib/store/projects-context";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CommandPalette } from "@/components/search/command-palette";
+import { GlobalSearch } from "@/components/layout/global-search";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -171,6 +172,7 @@ export default function RootLayout({
           <TooltipProvider>
             <ProjectsProvider>
               <CommandPalette />
+              <GlobalSearch />
               <div className="h-screen overflow-hidden splash-reveal-target">
                 <main className="h-full overflow-hidden">
                   {children}

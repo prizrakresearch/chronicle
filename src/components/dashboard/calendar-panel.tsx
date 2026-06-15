@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   getDashboardData,
@@ -104,7 +104,19 @@ export function CalendarPanel() {
         <span className="text-sm font-semibold text-white/80 tracking-tight">
           {MONTH_NAMES[month]} {year}
         </span>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1">
+          {/* Apple Calendar subscribe */}
+          <button
+            onClick={() => {
+              const token = process.env.NEXT_PUBLIC_CALENDAR_TOKEN ?? "";
+              const base  = window.location.origin.replace(/^https?/, "webcal");
+              window.location.href = `${base}/api/calendar?token=${encodeURIComponent(token)}`;
+            }}
+            title="Subscribe in Apple Calendar"
+            className="w-6 h-6 flex items-center justify-center rounded-full text-white/25 hover:text-white/70 hover:bg-white/8 transition duration-200 ease-in-out"
+          >
+            <CalendarDays className="h-3.5 w-3.5" />
+          </button>
           <button onClick={prevMonth} className="w-6 h-6 flex items-center justify-center rounded-full text-white/35 hover:text-white/80 hover:bg-white/8 transition duration-200 ease-in-out">
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>

@@ -163,6 +163,15 @@ export function ProjectGrid() {
       <div className="shrink-0 py-5 px-6 flex items-center justify-between z-20">
         <h1 className="text-sm font-semibold text-white/80">Chronicle</h1>
         <div className="flex items-center gap-2">
+          {/* Global search trigger */}
+          <button
+            onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }))}
+            className="h-9 px-3.5 flex items-center gap-2 rounded-full border border-white/10 text-white/30 hover:text-white/60 hover:border-white/20 transition duration-150 text-xs"
+          >
+            <Search className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Search</span>
+            <kbd className="hidden sm:inline text-[10px] font-mono bg-white/[0.06] px-1.5 py-0.5 rounded border border-white/10">⌘K</kbd>
+          </button>
           {!isReadOnly && (
             <>
               <Button
