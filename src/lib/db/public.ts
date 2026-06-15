@@ -14,12 +14,12 @@ import type { RepoBranch, RepoCommit } from "@/lib/db/github";
 import { toProject, toRoadmapItem, toTimelineEvent, toProjectLink } from "@/lib/db/transform";
 import type { Project, RoadmapItem, TimelineEvent, ProjectLink, ProjectFile } from "@/types";
 
+// Intentionally excludes project_notes and markdown_notes — note content
+// is private and must not be transmitted to unauthenticated share-page visitors.
 const PUBLIC_SELECT = `
   *,
   github_repos (*),
   calendar_events (*),
-  project_notes (*),
-  markdown_notes (*),
   roadmap_items (*),
   timeline_events (*),
   project_links (*),
@@ -39,6 +39,7 @@ export async function getPublicProject(id: string): Promise<PublicProjectData | 
     .from("projects")
     .select(PUBLIC_SELECT)
     .eq("id", id)
+    .eq("is_shared", true)
     .maybeSingle();
 
   if (error || !data) return null;
@@ -83,12 +84,13 @@ export async function getPublicProject(id: string): Promise<PublicProjectData | 
 
 // ── Public GitHub data (uses project owner's stored token, server-side only) ──
 
-/** Resolve a project's owner ID + linked repo info without auth. */
+/** Resolve a project's owner ID + linked repo info — only for explicitly shared projects. */
 async function getOwnerTokenAndRepo(projectId: string): Promise<{ token: string; fullName: string; defaultBranch: string } | null> {
   const { data } = await db
     .from("projects")
     .select("owner_id, github_repos(full_name, default_branch)")
     .eq("id", projectId)
+    .eq("is_shared", true)
     .maybeSingle();
 
   if (!data) return null;
@@ -104,7 +106,7 @@ async function getOwnerTokenAndRepo(projectId: string): Promise<{ token: string;
   if (!encrypted) return null;
 
   return {
-    token:         decryptToken(encrypted),
+    token:         await decryptToken(encrypted),
     fullName:      repo.full_name,
     defaultBranch: repo.default_branch,
   };

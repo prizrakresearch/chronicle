@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import React from "react";
 import {
   MoreHorizontal, GitBranch, Clock, Trash2, Archive, RotateCcw,
-  CircleDot, Pin, PinOff, EyeOff,
+  CircleDot, Pin, PinOff, EyeOff, Share2,
   Rocket, Globe, Terminal, Database, Layers, Cpu,
   Compass, Flame, Code2, Boxes, Radio, Wand2, Satellite, FlaskConical, Binary,
 } from "lucide-react";
@@ -56,8 +56,9 @@ export function ProjectRow({ project, dimmed = false }: ProjectRowProps) {
   const router = useRouter();
   const [pinSetupOpen, setPinSetupOpen] = useState(false);
   const repoShortName = project.githubRepo?.fullName.split("/")[1] ?? null;
-  const isPinned = project.pinned ?? false;
-  const isHidden = project.hidden ?? false;
+  const isPinned   = project.pinned    ?? false;
+  const isHidden   = project.hidden    ?? false;
+  const isShared   = project.isShared  ?? false;
 
   function handleHide() {
     if (!pin) {
@@ -151,6 +152,14 @@ export function ProjectRow({ project, dimmed = false }: ProjectRowProps) {
                 }>
                   <EyeOff className="h-3.5 w-3.5 mr-2 opacity-60" />
                   {isHidden ? "Unhide" : "Hide"}
+                </DropdownMenuItem>
+
+                {/* Public share page toggle */}
+                <DropdownMenuItem
+                  onClick={() => updateProject(project.id, { isShared: !isShared })}
+                >
+                  <Share2 className="h-3.5 w-3.5 mr-2 opacity-60" />
+                  {isShared ? "Disable public link" : "Enable public link"}
                 </DropdownMenuItem>
 
                 <DropdownMenuSeparator />

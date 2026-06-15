@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/supabase/server";
 import { getDownloadUrl } from "@/lib/s3/client";
+import { assertProjectAccess } from "@/lib/db/auth";
 
 /**
  * Proxy a file from S3 through our own origin so that Chrome's
@@ -33,24 +34,28 @@ export async function GET(req: NextRequest) {
   // by guessing or reusing keys they've seen in other projects.
   const { data: fileRow } = await db
     .from("project_files")
-    .select("id")
+    .select("id, project_id")
     .eq("storage_path", key)
     .is("deleted_at", null)
     .maybeSingle();
 
-  // Also allow logo keys — check project logos table
-  let authorized = !!fileRow;
-  if (!authorized) {
+  if (fileRow) {
+    // Guests may only download files from projects they've been shared on.
+    try {
+      await assertProjectAccess(userId, meta.role as string, fileRow.project_id as string);
+    } catch {
+      return new NextResponse("Forbidden", { status: 403 });
+    }
+  } else {
+    // Also allow logo keys — check project logos table
     const { data: projectRow } = await db
       .from("projects")
       .select("id")
       .eq("logo_s3_key", key)
       .maybeSingle();
-    authorized = !!projectRow;
-  }
-
-  if (!authorized) {
-    return new NextResponse("Forbidden", { status: 403 });
+    if (!projectRow) {
+      return new NextResponse("Forbidden", { status: 403 });
+    }
   }
 
   // Fetch via a short-lived presigned URL (60 s is enough for the proxy fetch)

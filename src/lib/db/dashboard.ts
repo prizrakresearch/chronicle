@@ -6,9 +6,16 @@ import { db } from "@/lib/supabase/server";
 export interface DashboardEvent { id: string; date: string; title: string }
 export interface DashboardNote  { id: string; content: string; createdAt: string }
 
+async function requireOwnerSession(): Promise<string> {
+  const { userId, sessionClaims } = await auth();
+  if (!userId) throw new Error("Unauthenticated");
+  const meta = (sessionClaims?.metadata ?? {}) as { role?: string };
+  if (meta.role !== "owner") throw new Error("Forbidden");
+  return userId;
+}
+
 export async function getDashboardData(): Promise<{ events: DashboardEvent[]; notes: DashboardNote[] }> {
-  const { userId } = await auth();
-  if (!userId) return { events: [], notes: [] };
+  const userId = await requireOwnerSession();
 
   const { data } = await db
     .from("owner_settings")
@@ -25,8 +32,7 @@ export async function getDashboardData(): Promise<{ events: DashboardEvent[]; no
 }
 
 export async function saveDashboardEvents(events: DashboardEvent[]): Promise<void> {
-  const { userId } = await auth();
-  if (!userId) return;
+  const userId = await requireOwnerSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (db.from("owner_settings") as any).upsert({
     owner_id:         userId,
@@ -35,8 +41,7 @@ export async function saveDashboardEvents(events: DashboardEvent[]): Promise<voi
 }
 
 export async function saveDashboardNotes(notes: DashboardNote[]): Promise<void> {
-  const { userId } = await auth();
-  if (!userId) return;
+  const userId = await requireOwnerSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (db.from("owner_settings") as any).upsert({
     owner_id:        userId,

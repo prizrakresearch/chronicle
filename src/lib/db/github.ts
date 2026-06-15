@@ -45,7 +45,7 @@ async function getClerkClient() {
 /** Save an encrypted GitHub PAT in Clerk private metadata. */
 export async function saveGithubToken(rawToken: string): Promise<void> {
   const ownerId = await requireOwner();
-  const encrypted = encryptToken(rawToken.trim());
+  const encrypted = await encryptToken(rawToken.trim());
   const client = await getClerkClient();
   await client.users.updateUserMetadata(ownerId, {
     privateMetadata: { githubToken: encrypted },
@@ -76,11 +76,12 @@ async function getStoredToken(): Promise<string> {
   const user = await client.users.getUser(ownerId);
   const encrypted = (user.privateMetadata as { githubToken?: string | null })?.githubToken;
   if (!encrypted) throw new Error("No GitHub token saved — connect one via Settings → GitHub");
-  return decryptToken(encrypted);
+  return await decryptToken(encrypted);
 }
 
 /** Validate a token against GitHub API — returns the authenticated username. */
 export async function validateGithubToken(rawToken: string): Promise<{ login: string }> {
+  await requireOwner();
   const user = await githubFetch(rawToken.trim(), "/user") as { login: string };
   return { login: user.login };
 }

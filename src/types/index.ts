@@ -47,6 +47,11 @@ export interface GitHubRepo {
   lastSyncedAt: Date | null;
 }
 
+export interface ProjectRelation {
+  relatedId: string;
+  label: string | null;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -64,6 +69,8 @@ export interface Project {
   credentials:   Credential[];
   pinned?: boolean;
   hidden?: boolean;
+  isShared?: boolean;
+  linkedProjects: ProjectRelation[];
   _count: { timelineEvents: number; roadmapItems: number };
 }
 

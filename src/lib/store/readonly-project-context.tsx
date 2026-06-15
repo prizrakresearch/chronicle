@@ -61,6 +61,9 @@ interface ProjectsContextValue {
   unlinkRepo:         (projectId: string) => Promise<void>;
   syncRepo:           (projectId: string) => Promise<void>;
   reloadProjectFiles: () => Promise<void>;
+
+  linkProjects:   (projectId: string, relatedId: string, label?: string | null) => void;
+  unlinkProjects: (projectId: string, relatedId: string) => void;
 }
 
 interface Props {
@@ -124,6 +127,8 @@ export function ReadOnlyProjectsProvider({
     unlinkRepo:       asyncNoop,
     syncRepo:           asyncNoop,
     reloadProjectFiles: asyncNoop,
+    linkProjects:   noop,
+    unlinkProjects: noop,
   }), [project, roadmapItems, timelineEvents, links, projectFiles]);
 
   return (

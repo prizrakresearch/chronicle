@@ -15,7 +15,7 @@ function icalDate(iso: string): string {
 }
 
 function icalEscape(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+  return s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r\n|\r|\n/g, "\\n");
 }
 
 function icalNextDay(iso: string): string {
@@ -27,7 +27,12 @@ function icalNextDay(iso: string): string {
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const token = req.nextUrl.searchParams.get("token");
+  // Accept token via Authorization: Bearer <token> (preferred) or ?token= (legacy, for
+  // calendar clients that don't support custom headers, e.g. Apple Calendar feed URLs).
+  const authHeader = req.headers.get("Authorization");
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const queryToken  = req.nextUrl.searchParams.get("token");
+  const token       = bearerToken ?? queryToken;
 
   if (!token || token !== getCalendarToken()) {
     return new NextResponse("Unauthorized", { status: 401 });

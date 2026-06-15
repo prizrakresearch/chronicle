@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ProjectCalendarPanel } from "./project-calendar-panel";
 import { LinkRepoDialog } from "@/components/projects/link-repo-dialog";
+import { LinkedProjectsSection } from "@/components/projects/linked-projects-section";
 import { formatLastSynced } from "@/lib/utils/format";
 import { useProjects } from "@/lib/store/projects-context";
 import { cn } from "@/lib/utils";
@@ -268,6 +269,8 @@ export function OverviewPanel({ project, onOpenNotes }: OverviewPanelProps) {
         />
 
         <GithubSection project={project} />
+
+        <LinkedProjectsSection project={project} />
 
       </div>
 

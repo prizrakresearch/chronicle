@@ -494,11 +494,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           <button
             onClick={handleCopyLink}
             disabled={!project.githubRepo}
-            title={!project.githubRepo ? "No GitHub repo linked" : `Copy link to ${project.githubRepo.fullName}`}
+            title={!project.githubRepo ? "No GitHub repo linked" : `Copy GitHub link for ${project.githubRepo.fullName}`}
             className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent border flex items-center gap-2 transition duration-200 ease-in-out hover:-translate-y-px active:translate-y-0 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:translate-y-0 text-violet-400/75 border-violet-400/75 hover:bg-violet-400/10"
           >
             {copied ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
-            {copied ? "Copied!" : "Copy link"}
+            {copied ? "Copied!" : "Copy GitHub link"}
           </button>
 
           {/* Share — opens popover with optional recipient name, copies link + native share sheet */}

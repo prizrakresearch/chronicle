@@ -20,21 +20,21 @@ export interface Database {
           id: string; owner_id: string; name: string;
           brief: string | null; description: string | null; problem_statement: string | null;
           status: ProjectStatus; logo_url: string | null; logo_s3_key: string | null;
-          pinned: boolean; hidden: boolean;
+          pinned: boolean; hidden: boolean; is_shared: boolean;
           created_at: string; updated_at: string;
         };
         Insert: {
           id?: string; owner_id: string; name: string;
           brief?: string | null; description?: string | null; problem_statement?: string | null;
           status?: ProjectStatus; logo_url?: string | null; logo_s3_key?: string | null;
-          pinned?: boolean; hidden?: boolean;
+          pinned?: boolean; hidden?: boolean; is_shared?: boolean;
           created_at?: string; updated_at?: string;
         };
         Update: {
           id?: string; owner_id?: string; name?: string;
           brief?: string | null; description?: string | null; problem_statement?: string | null;
           status?: ProjectStatus; logo_url?: string | null; logo_s3_key?: string | null;
-          pinned?: boolean; hidden?: boolean;
+          pinned?: boolean; hidden?: boolean; is_shared?: boolean;
           created_at?: string; updated_at?: string;
         };
         Relationships: [];
@@ -161,6 +161,13 @@ export interface Database {
         Row: { owner_id: string; created_at: string; github_token: string | null };
         Insert: { owner_id: string; created_at?: string; github_token?: string | null };
         Update: { owner_id?: string; created_at?: string; github_token?: string | null };
+        Relationships: [];
+      };
+
+      project_relationships: {
+        Row: { project_id: string; related_id: string; label: string | null; created_at: string };
+        Insert: { project_id: string; related_id: string; label?: string | null; created_at?: string };
+        Update: { project_id?: string; related_id?: string; label?: string | null; created_at?: string };
         Relationships: [];
       };
 

@@ -64,7 +64,8 @@ export async function getProjects() {
     credentials (*, credential_pairs (*)),
     roadmap_items (*),
     timeline_events (*),
-    project_links (*)
+    project_links (*),
+    project_relationships!project_relationships_project_id_fkey (related_id, label)
   `;
 
   if (isOwner) {
@@ -165,9 +166,16 @@ export async function updateProject(
     logo_url: string | null;
     pinned: boolean;
     hidden: boolean;
+    is_shared: boolean;
   }>
 ) {
   await requireOwner();
+  if ("logo_url" in updates && updates.logo_url != null) {
+    const proto = updates.logo_url.trim().toLowerCase();
+    if (!proto.startsWith("https://") && !proto.startsWith("http://")) {
+      throw new Error("Invalid logo URL: only http and https are allowed");
+    }
+  }
   const { error } = await db.from("projects").update(updates).eq("id", id);
   if (error) throw error;
   revalidatePath("/");

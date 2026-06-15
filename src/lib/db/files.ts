@@ -1,7 +1,7 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/supabase/server";
+import { requireAuth, requireOwner, assertProjectAccess } from "./auth";
 import { buildFileKey, buildLogoKey, getUploadUrl, getDownloadUrl, deleteObject } from "@/lib/s3/client";
 import { revalidatePath } from "next/cache";
 import type { LinkType } from "@/lib/supabase/types";
@@ -17,11 +17,7 @@ export async function requestLogoUploadUrl(
   filename: string,
   mimeType: string,
 ): Promise<{ uploadUrl: string; s3Key: string }> {
-  const { userId, sessionClaims } = await auth();
-  if (!userId) throw new Error("Unauthenticated");
-  const meta = (sessionClaims?.metadata ?? {}) as { role?: string };
-  if (meta.role !== "owner") throw new Error("Forbidden");
-
+  const userId = await requireOwner();
   const key  = buildLogoKey(userId, projectId, filename);
   const url  = await getUploadUrl(key, mimeType);
   return { uploadUrl: url, s3Key: key };
@@ -35,11 +31,7 @@ export async function saveProjectLogoKey(
   projectId: string,
   s3Key: string,
 ): Promise<string> {
-  const { userId, sessionClaims } = await auth();
-  if (!userId) throw new Error("Unauthenticated");
-  const meta = (sessionClaims?.metadata ?? {}) as { role?: string };
-  if (meta.role !== "owner") throw new Error("Forbidden");
-
+  await requireOwner();
   const { error } = await db
     .from("projects")
     .update({ logo_s3_key: s3Key, logo_url: null })
@@ -50,28 +42,11 @@ export async function saveProjectLogoKey(
   return getDownloadUrl(s3Key, 3600);
 }
 
-async function requireOwner() {
-  const { userId, sessionClaims } = await auth();
-  if (!userId) throw new Error("Unauthenticated");
-  const meta = (sessionClaims?.metadata ?? {}) as { role?: string };
-  if (meta.role !== "owner") throw new Error("Forbidden");
-  return userId;
-}
-
-/** Minimum bar for read-only server actions: signed in, has a role, not expired. */
-async function requireAuth() {
-  const { userId, sessionClaims } = await auth();
-  if (!userId) throw new Error("Unauthenticated");
-  const meta = (sessionClaims?.metadata ?? {}) as { role?: string; expiresAt?: string };
-  if (!meta.role) throw new Error("Forbidden");
-  if (meta.expiresAt && new Date(meta.expiresAt) < new Date()) throw new Error("Forbidden");
-  return userId;
-}
-
 // ── Folders ───────────────────────────────────────────────────────────────────
 
 export async function getFolders(projectId: string) {
-  await requireAuth();
+  const { userId, role } = await requireAuth();
+  await assertProjectAccess(userId, role, projectId);
   const { data, error } = await db
     .from("folders")
     .select("*")
@@ -110,7 +85,8 @@ export async function deleteFolder(id: string, projectId: string) {
 // ── Links ─────────────────────────────────────────────────────────────────────
 
 export async function getLinks(projectId: string) {
-  await requireAuth();
+  const { userId, role } = await requireAuth();
+  await assertProjectAccess(userId, role, projectId);
   const { data, error } = await db
     .from("project_links")
     .select("*")
@@ -118,6 +94,13 @@ export async function getLinks(projectId: string) {
     .is("deleted_at", null);
   if (error) throw error;
   return data ?? [];
+}
+
+function assertSafeUrl(url: string) {
+  const proto = url.trim().toLowerCase();
+  if (!proto.startsWith("https://") && !proto.startsWith("http://")) {
+    throw new Error("Invalid URL: only http and https are allowed");
+  }
 }
 
 export async function addLink(input: {
@@ -130,6 +113,7 @@ export async function addLink(input: {
   tags?: string[];
 }) {
   await requireOwner();
+  assertSafeUrl(input.url);
   const { data, error } = await db
     .from("project_links")
     .insert({ tags: [], folder_id: null, ...input })
@@ -147,6 +131,7 @@ export async function updateLink(
   updates: Partial<{ title: string; url: string; type: LinkType; folder_id: string | null; tags: string[] }>
 ) {
   await requireOwner();
+  if (updates.url !== undefined) assertSafeUrl(updates.url);
   const { error } = await db.from("project_links").update(updates).eq("id", id);
   if (error) throw error;
   revalidatePath(`/projects/${projectId}`);
@@ -180,6 +165,8 @@ export async function permanentDeleteLink(id: string, projectId: string) {
 // ── Files ─────────────────────────────────────────────────────────────────────
 
 export async function getProjectFiles(projectId: string) {
+  const { userId, role } = await requireAuth();
+  await assertProjectAccess(userId, role, projectId);
   const { data, error } = await db
     .from("project_files")
     .select("*")
@@ -199,11 +186,7 @@ export async function requestUploadUrl(input: {
   filename: string;
   mime_type: string;
 }) {
-  const { userId, sessionClaims } = await auth();
-  if (!userId) throw new Error("Unauthenticated");
-  const meta = (sessionClaims?.metadata ?? {}) as { role?: string };
-  if (meta.role !== "owner") throw new Error("Forbidden");
-
+  const userId = await requireOwner();
   const key = buildFileKey(userId, input.project_id, input.filename);
   const url = await getUploadUrl(key, input.mime_type);
   return { uploadUrl: url, s3Key: key };
@@ -215,13 +198,26 @@ export async function requestUploadUrl(input: {
  * Used by the client context to populate the files panel on page load.
  */
 export async function getProjectFilesWithUrls(projectIds: string[]) {
-  await requireAuth();
+  const { userId, role } = await requireAuth();
   if (projectIds.length === 0) return [];
+
+  // Guests: filter input to only projects they have explicit access to.
+  let allowedIds = projectIds;
+  if (role !== "owner") {
+    const { data: shares } = await db
+      .from("project_shares")
+      .select("project_id")
+      .eq("clerk_user_id", userId)
+      .in("project_id", projectIds);
+    const shareSet = new Set((shares ?? []).map((s) => s.project_id));
+    allowedIds = projectIds.filter((id) => shareSet.has(id));
+    if (allowedIds.length === 0) return [];
+  }
 
   const { data, error } = await db
     .from("project_files")
     .select("*")
-    .in("project_id", projectIds)
+    .in("project_id", allowedIds)
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -272,7 +268,16 @@ export async function saveProjectFile(input: {
  * Call this whenever you need to render/download a file.
  */
 export async function getFileUrl(s3Key: string): Promise<string> {
-  await requireAuth();
+  const { userId, role } = await requireAuth();
+  // Verify the key belongs to a project the user can access
+  const { data: fileRow } = await db
+    .from("project_files")
+    .select("project_id")
+    .eq("storage_path", s3Key)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!fileRow) throw new Error("Forbidden");
+  await assertProjectAccess(userId, role, fileRow.project_id as string);
   return getDownloadUrl(s3Key);
 }
 
@@ -325,7 +330,8 @@ export async function checkFilenameConflict(
   projectId: string,
   filename: string,
 ): Promise<{ id: string; name: string; version_number: number; storage_path: string; size: number } | null> {
-  await requireAuth();
+  const { userId, role } = await requireAuth();
+  await assertProjectAccess(userId, role, projectId);
   const { data } = await db
     .from("project_files")
     .select("id, name, storage_path, size")
@@ -396,7 +402,16 @@ export type FileVersionRow = {
 };
 
 export async function getFileVersions(fileId: string): Promise<FileVersionRow[]> {
-  await requireAuth();
+  const { userId, role } = await requireAuth();
+  // Resolve the file's project so we can check share access
+  const { data: fileRow } = await db
+    .from("project_files")
+    .select("project_id")
+    .eq("id", fileId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!fileRow) throw new Error("Forbidden");
+  await assertProjectAccess(userId, role, fileRow.project_id as string);
 
   const { data, error } = await db
     .from("file_versions")
@@ -469,7 +484,8 @@ export async function restoreFileVersion(
 // ── Trash ─────────────────────────────────────────────────────────────────────
 
 export async function getTrashedItems(projectId: string) {
-  await requireAuth();
+  const { userId, role } = await requireAuth();
+  await assertProjectAccess(userId, role, projectId);
 
   const [filesRes, linksRes] = await Promise.all([
     db.from("project_files").select("*").eq("project_id", projectId)
@@ -492,7 +508,8 @@ export async function getTrashedItems(projectId: string) {
 // ── Calendar events ───────────────────────────────────────────────────────────
 
 export async function getCalendarEvents(projectId: string) {
-  await requireAuth();
+  const { userId, role } = await requireAuth();
+  await assertProjectAccess(userId, role, projectId);
   const { data, error } = await db
     .from("calendar_events")
     .select("*")

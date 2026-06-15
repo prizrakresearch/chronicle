@@ -15,6 +15,7 @@ import type {
   TimelineEvent,
   RoadmapItem,
   ProjectLink,
+  ProjectRelation,
 } from "@/types";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -100,6 +101,7 @@ export function toProject(row: Row): Project {
     logoUrl:          row.logo_url         ?? null,
     pinned:           row.pinned           ?? false,
     hidden:           row.hidden           ?? false,
+    isShared:         row.is_shared        ?? false,
     createdAt:        new Date(row.created_at),
     updatedAt:        new Date(row.updated_at),
     githubRepo:       ghRepo ? toGithubRepo(ghRepo) : null,
@@ -107,6 +109,10 @@ export function toProject(row: Row): Project {
     projectNotes:     (row.project_notes    ?? []).map(toProjectNote),
     markdownNotes:    (row.markdown_notes   ?? []).map(toMarkdownNote),
     credentials:      (row.credentials      ?? []).map(toCredential),
+    linkedProjects:   (row.project_relationships ?? []).map((r: Row): ProjectRelation => ({
+      relatedId: r.related_id,
+      label:     r.label ?? null,
+    })),
     _count: {
       timelineEvents: (row.timeline_events ?? []).length,
       roadmapItems:   (row.roadmap_items   ?? []).length,

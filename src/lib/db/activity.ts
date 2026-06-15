@@ -64,6 +64,19 @@ export async function logActivity(
 ): Promise<void> {
   try {
     const actor = await resolveActor();
+
+    // Guests must have explicit project access to log activity.
+    // Prevents direct server action calls from injecting fake entries.
+    if (actor.role !== "owner") {
+      const { data: share } = await db
+        .from("project_shares")
+        .select("project_id")
+        .eq("project_id", projectId)
+        .eq("clerk_user_id", actor.userId)
+        .maybeSingle();
+      if (!share) return; // silently drop — never throw from fire-and-forget
+    }
+
     await db
       .from("project_activity")
       .insert({
@@ -90,6 +103,17 @@ export async function getProjectActivity(
   const meta = (sessionClaims?.metadata ?? {}) as { role?: string; expiresAt?: string };
   if (!meta.role) throw new Error("Forbidden");
   if (meta.expiresAt && new Date(meta.expiresAt) < new Date()) throw new Error("Forbidden");
+
+  // Guests may only view activity for projects they've been explicitly shared on.
+  if (meta.role !== "owner") {
+    const { data: share } = await db
+      .from("project_shares")
+      .select("project_id")
+      .eq("project_id", projectId)
+      .eq("clerk_user_id", userId)
+      .maybeSingle();
+    if (!share) throw new Error("Forbidden");
+  }
 
   const { data, error } = await db
     .from("project_activity")

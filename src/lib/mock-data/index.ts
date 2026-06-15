@@ -26,7 +26,7 @@ export const MOCK_PROJECTS: Project[] = [
       stars: 12,
       lastSyncedAt: d(0),
     },
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 6, roadmapItems: 6 },
   },
   {
@@ -40,7 +40,7 @@ export const MOCK_PROJECTS: Project[] = [
     createdAt: d(120),
     updatedAt: d(14),
     githubRepo: null,
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 4, roadmapItems: 4 },
   },
   {
@@ -62,7 +62,7 @@ export const MOCK_PROJECTS: Project[] = [
       stars: 143,
       lastSyncedAt: d(90),
     },
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 5, roadmapItems: 5 },
   },
   {
@@ -83,7 +83,7 @@ export const MOCK_PROJECTS: Project[] = [
       stars: 34,
       lastSyncedAt: d(2),
     },
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 8, roadmapItems: 3 },
   },
   {
@@ -104,7 +104,7 @@ export const MOCK_PROJECTS: Project[] = [
       stars: 21,
       lastSyncedAt: d(5),
     },
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 4, roadmapItems: 6 },
   },
   {
@@ -117,7 +117,7 @@ export const MOCK_PROJECTS: Project[] = [
     createdAt: d(180),
     updatedAt: d(30),
     githubRepo: null,
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 3, roadmapItems: 9 },
   },
   {
@@ -138,7 +138,7 @@ export const MOCK_PROJECTS: Project[] = [
       stars: 7,
       lastSyncedAt: d(1),
     },
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 11, roadmapItems: 2 },
   },
   {
@@ -159,7 +159,7 @@ export const MOCK_PROJECTS: Project[] = [
       stars: 89,
       lastSyncedAt: d(45),
     },
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 6, roadmapItems: 7 },
   },
   {
@@ -180,7 +180,7 @@ export const MOCK_PROJECTS: Project[] = [
       stars: 56,
       lastSyncedAt: d(3),
     },
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 9, roadmapItems: 4 },
   },
   {
@@ -201,7 +201,7 @@ export const MOCK_PROJECTS: Project[] = [
       stars: 211,
       lastSyncedAt: d(180),
     },
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 14, roadmapItems: 0 },
   },
   {
@@ -214,7 +214,7 @@ export const MOCK_PROJECTS: Project[] = [
     createdAt: d(130),
     updatedAt: d(60),
     githubRepo: null,
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 5, roadmapItems: 8 },
   },
   {
@@ -235,7 +235,7 @@ export const MOCK_PROJECTS: Project[] = [
       stars: 103,
       lastSyncedAt: d(0),
     },
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 7, roadmapItems: 5 },
   },
   {
@@ -256,7 +256,7 @@ export const MOCK_PROJECTS: Project[] = [
       stars: 38,
       lastSyncedAt: d(240),
     },
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 3, roadmapItems: 0 },
   },
   {
@@ -269,7 +269,7 @@ export const MOCK_PROJECTS: Project[] = [
     createdAt: d(55),
     updatedAt: d(4),
     githubRepo: null,
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 10, roadmapItems: 6 },
   },
   {
@@ -290,7 +290,7 @@ export const MOCK_PROJECTS: Project[] = [
       stars: 17,
       lastSyncedAt: d(0),
     },
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 4, roadmapItems: 3 },
   },
   {
@@ -311,7 +311,7 @@ export const MOCK_PROJECTS: Project[] = [
       stars: 62,
       lastSyncedAt: d(75),
     },
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 6, roadmapItems: 5 },
   },
   {
@@ -332,7 +332,7 @@ export const MOCK_PROJECTS: Project[] = [
       stars: 29,
       lastSyncedAt: d(120),
     },
-    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [],
+    problemStatement: null, calendarEvents: [], projectNotes: [], markdownNotes: [], credentials: [], linkedProjects: [],
     _count: { timelineEvents: 2, roadmapItems: 0 },
   },
 ];

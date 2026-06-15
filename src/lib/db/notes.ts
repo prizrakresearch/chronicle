@@ -1,30 +1,18 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/supabase/server";
+import { requireAuth as _requireAuth, requireOwner as _requireOwner, assertProjectAccess } from "./auth";
 import { revalidatePath } from "next/cache";
 import type { EventType } from "@/lib/supabase/types";
 
-async function requireOwner() {
-  const { userId, sessionClaims } = await auth();
-  if (!userId) throw new Error("Unauthenticated");
-  const meta = (sessionClaims?.metadata ?? {}) as { role?: string };
-  if (meta.role !== "owner") throw new Error("Forbidden");
-  return userId;
-}
-
-async function requireAuth() {
-  const { userId, sessionClaims } = await auth();
-  if (!userId) throw new Error("Unauthenticated");
-  const meta = (sessionClaims?.metadata ?? {}) as { role?: string; expiresAt?: string };
-  if (!meta.role) throw new Error("Forbidden");
-  if (meta.expiresAt && new Date(meta.expiresAt) < new Date()) throw new Error("Forbidden");
-}
+const requireOwner = _requireOwner;
+const requireAuth  = _requireAuth;
 
 // ── Markdown notes ────────────────────────────────────────────────────────────
 
 export async function getMarkdownNotes(projectId: string) {
-  await requireAuth();
+  const { userId, role } = await requireAuth();
+  await assertProjectAccess(userId, role, projectId);
   const { data, error } = await db
     .from("markdown_notes")
     .select("*")
@@ -96,7 +84,8 @@ export async function deleteProjectNote(id: string, projectId: string) {
 // ── Timeline events ───────────────────────────────────────────────────────────
 
 export async function getTimeline(projectId: string) {
-  await requireAuth();
+  const { userId, role } = await requireAuth();
+  await assertProjectAccess(userId, role, projectId);
   const { data, error } = await db
     .from("timeline_events")
     .select("*")

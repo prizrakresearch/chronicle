@@ -48,6 +48,10 @@ import {
   unlinkRepoFromProject    as dbUnlinkRepo,
   syncRepoData             as dbSyncRepo,
 } from "@/lib/db/github";
+import {
+  linkProjects   as dbLinkProjects,
+  unlinkProjects as dbUnlinkProjects,
+} from "@/lib/db/relationships";
 
 // ── Context interface ──────────────────────────────────────────────────────────
 
@@ -103,6 +107,10 @@ interface ProjectsContextValue {
   linkRepo:        (projectId: string, fullName: string) => Promise<void>;
   unlinkRepo:      (projectId: string) => Promise<void>;
   syncRepo:        (projectId: string) => Promise<void>;
+
+  // Related projects
+  linkProjects:   (projectId: string, relatedId: string, label?: string | null) => void;
+  unlinkProjects: (projectId: string, relatedId: string) => void;
 }
 
 const ProjectsContext = createContext<ProjectsContextValue | null>(null);
@@ -292,6 +300,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       projectNotes:     [],
       markdownNotes:    [],
       credentials:      [],
+      linkedProjects:   [],
       pinned:           false,
       hidden:           false,
       _count:           { timelineEvents: 0, roadmapItems: 0 },
@@ -328,9 +337,10 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     const SNAKE: Record<string, string> = {
       problemStatement: "problem_statement",
       logoUrl:          "logo_url",
+      isShared:         "is_shared",
     };
     const dbFields: Record<string, unknown> = {};
-    for (const k of ["name","brief","description","problemStatement","status","logoUrl","pinned","hidden"] as const) {
+    for (const k of ["name","brief","description","problemStatement","status","logoUrl","pinned","hidden","isShared"] as const) {
       if (k in updates) dbFields[SNAKE[k] ?? k] = (updates as Record<string, unknown>)[k];
     }
     if (Object.keys(dbFields).length > 0) {
@@ -682,6 +692,34 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  // ── Related project mutations ──────────────────────────────────────────────────
+
+  const linkProjects = useCallback((projectId: string, relatedId: string, label?: string | null) => {
+    setProjects((prev) => prev.map((p) => {
+      if (p.id === projectId && !p.linkedProjects.some((r) => r.relatedId === relatedId)) {
+        return { ...p, linkedProjects: [...p.linkedProjects, { relatedId, label: label ?? null }] };
+      }
+      if (p.id === relatedId && !p.linkedProjects.some((r) => r.relatedId === projectId)) {
+        return { ...p, linkedProjects: [...p.linkedProjects, { relatedId: projectId, label: label ?? null }] };
+      }
+      return p;
+    }));
+    dbLinkProjects(projectId, relatedId, label).catch(console.error);
+  }, []);
+
+  const unlinkProjects = useCallback((projectId: string, relatedId: string) => {
+    setProjects((prev) => prev.map((p) => {
+      if (p.id === projectId) {
+        return { ...p, linkedProjects: p.linkedProjects.filter((r) => r.relatedId !== relatedId) };
+      }
+      if (p.id === relatedId) {
+        return { ...p, linkedProjects: p.linkedProjects.filter((r) => r.relatedId !== projectId) };
+      }
+      return p;
+    }));
+    dbUnlinkProjects(projectId, relatedId).catch(console.error);
+  }, []);
+
   return (
     <ProjectsContext.Provider
       value={{
@@ -721,6 +759,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
         linkRepo,
         unlinkRepo,
         syncRepo,
+        linkProjects,
+        unlinkProjects,
       }}
     >
       {children}

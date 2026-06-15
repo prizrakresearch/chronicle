@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/supabase/server";
+import { assertProjectAccess } from "@/lib/db/auth";
 
 export async function GET(req: NextRequest) {
   const { userId, sessionClaims } = await auth();
@@ -14,6 +15,13 @@ export async function GET(req: NextRequest) {
 
   const projectId = req.nextUrl.searchParams.get("projectId");
   if (!projectId) return NextResponse.json({ error: "Missing projectId" }, { status: 400 });
+
+  // Guests must have an explicit project_shares row for this project.
+  try {
+    await assertProjectAccess(userId, meta.role!, projectId);
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const { data, error } = await db
     .from("folders")
