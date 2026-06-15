@@ -232,10 +232,11 @@ export async function inviteGuest(
   // ── New user ─────────────────────────────────────────────────────────────────
   // Create their Clerk account, mint a single-use magic sign-in link, send email.
 
-  // Derive first/last name — Clerk instance requires these fields
-  const nameParts = name ? name.trim().split(/\s+/) : [];
-  const firstName = nameParts[0] ?? normalised.split("@")[0];
-  const lastName  = nameParts.slice(1).join(" ") || undefined;
+  // Derive first/last name — Clerk instance requires both fields to be non-empty
+  const nameParts  = name ? name.trim().split(/\s+/) : [];
+  const emailParts = normalised.split("@")[0].split(/[._\-+]/);
+  const firstName  = nameParts[0]                    ?? emailParts[0] ?? "User";
+  const lastName   = nameParts.slice(1).join(" ") || emailParts[1]   || emailParts[0] || "User";
 
   let newUserId: string;
   try {
