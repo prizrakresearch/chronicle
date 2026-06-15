@@ -92,6 +92,8 @@ export interface ProjectLink {
   title: string;
   url: string;
   type: LinkType;
+  folderId: string | null;
+  tags: string[];
 }
 
 export interface ProjectFile {
@@ -105,4 +107,6 @@ export interface ProjectFile {
   /** S3 object key — present for S3-backed files, undefined for legacy. */
   s3Key?: string;
   createdAt: string; // ISO
+  folderId: string | null;
+  tags: string[];
 }

@@ -176,6 +176,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
               dataUrl:    f.presigned_url,
               s3Key:      f.storage_path,
               createdAt:  f.created_at,
+              folderId:   f.folder_id   ?? null,
+              tags:       f.tags        ?? [],
             })));
           }
         }
@@ -555,6 +557,8 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       dataUrl:   downloadUrl,
       s3Key,
       createdAt: saved.created_at,
+      folderId:  null,
+      tags:      [],
     }, ...prev]);
   }, []);
 

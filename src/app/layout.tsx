@@ -59,8 +59,6 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        {/* The Seasons — decorative serif used for the splash "C" mark */}
-        <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/the-seasons" />
 
         {/*
           Theme-aware favicon.

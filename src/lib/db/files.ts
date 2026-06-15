@@ -80,6 +80,13 @@ export async function createFolder(projectId: string, name: string) {
   return data;
 }
 
+export async function renameFolder(id: string, projectId: string, name: string) {
+  await requireOwner();
+  const { error } = await db.from("folders").update({ name }).eq("id", id);
+  if (error) throw error;
+  revalidatePath(`/projects/${projectId}`);
+}
+
 export async function deleteFolder(id: string, projectId: string) {
   await requireOwner();
   // Files/links inside become folder_id = null (ON DELETE SET NULL)

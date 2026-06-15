@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useRef, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import {
   Plus, Link2, Upload, GitBranch, FileText, Globe, Palette,
   Image, Video, Music, Archive, Code2, File,
   Copy, Check, Trash2, ExternalLink, Download,
   FolderPlus, FolderOpen, ChevronRight, X, Hash,
-  LayoutList, LayoutGrid, Maximize2, Minimize2, KeyRound, CheckCircle2,
+  LayoutList, LayoutGrid, Maximize2, Minimize2, KeyRound, CheckCircle2, Pencil,
 } from "lucide-react";
 import { AddLinkDialog } from "@/components/links/add-link-dialog";
 import { GitSidebar } from "./git-sidebar";
@@ -17,6 +17,12 @@ import { cn } from "@/lib/utils";
 import type { Project, ProjectLink, ProjectFile } from "@/types";
 import type { RepoBranch, RepoCommit } from "@/lib/db/github";
 import { createPortal } from "react-dom";
+import {
+  createFolder  as dbCreateFolder,
+  renameFolder  as dbRenameFolder,
+  updateProjectFile as dbUpdateFile,
+  updateLink    as dbUpdateLink,
+} from "@/lib/db/files";
 
 // ── Icon / colour helpers ─────────────────────────────────────────────────────
 
@@ -159,7 +165,7 @@ type ItemType = { kind: "link"; link: ProjectLink } | { kind: "file"; file: Proj
 
 // ── List row ──────────────────────────────────────────────────────────────────
 
-function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onDeleteFile, isReadOnly, isDragging, onItemDragStart, onItemDragEnd }: {
+function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onDeleteFile, isReadOnly, isDragging, onItemDragStart, onItemDragEnd, isSelected, showCheckbox, onToggleSelect }: {
   item: ItemType; meta: ItemMeta; folders: { id: string; name: string }[];
   allTags: string[]; onMetaChange: (m: Partial<ItemMeta>) => void;
   onDeleteLink: (id: string) => void; onDeleteFile: (id: string) => void;
@@ -167,6 +173,9 @@ function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onD
   isDragging?:      boolean;
   onItemDragStart?: (id: string) => void;
   onItemDragEnd?:   () => void;
+  isSelected?:      boolean;
+  showCheckbox?:    boolean;
+  onToggleSelect?:  (id: string, e: React.MouseEvent) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const id        = item.kind === "link" ? item.link.id : item.file.id;
@@ -178,35 +187,55 @@ function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onD
   return (
     <div
       className={cn(
-        "flex flex-col gap-1.5 px-4 py-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04] transition duration-150 group",
-        isDragging && "opacity-40 scale-[0.98]",
+        "flex flex-col gap-1.5 px-4 py-3 rounded-2xl border transition duration-150 group",
+        isSelected
+          ? "border-primary/30 bg-primary/[0.05]"
+          : "border-white/[0.06] bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04]",
         !isReadOnly && "cursor-grab active:cursor-grabbing",
       )}
       draggable={!isReadOnly}
       onDragStart={(e) => {
         e.dataTransfer.setData("application/x-chronicle-item", id);
-        e.dataTransfer.effectAllowed = "move";
-        // Let Chrome/Safari drag the file to the desktop via the DownloadURL trick
-        if (item.kind === "file") {
+        e.dataTransfer.effectAllowed = "copyMove";
+        // Same-origin proxy URL — Chrome allows DownloadURL for same-origin only
+        if (item.kind === "file" && item.file.s3Key) {
+          const proxyUrl =
+            `${window.location.origin}/api/files/download` +
+            `?key=${encodeURIComponent(item.file.s3Key)}` +
+            `&name=${encodeURIComponent(item.file.name)}`;
           try {
             e.dataTransfer.setData(
               "DownloadURL",
-              `${item.file.mimeType}:${item.file.name}:${item.file.dataUrl}`,
+              `${item.file.mimeType}:${item.file.name}:${proxyUrl}`,
             );
-          } catch {}
+          } catch { /* ignore */ }
         }
         onItemDragStart?.(id);
       }}
       onDragEnd={() => onItemDragEnd?.()}
     >
       <div className="flex items-center gap-3">
+        {/* Checkbox — visible on hover or when any item is selected */}
+        {onToggleSelect && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleSelect(id, e); }}
+            onMouseDown={(e) => e.stopPropagation()}
+            className={cn(
+              "shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-all duration-150",
+              isSelected
+                ? "bg-primary/80 border-primary/80"
+                : "border-white/20 bg-transparent",
+              !showCheckbox && !isSelected && "opacity-0 group-hover:opacity-100",
+            )}
+          >
+            {isSelected && <Check className="h-2.5 w-2.5 text-black" />}
+          </button>
+        )}
         <div className="w-8 h-8 rounded-xl bg-white/[0.06] flex items-center justify-center shrink-0">
           <Icon className={cn("h-4 w-4", iconCls)} />
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-white/80 truncate">{title}</p>
-          <p className="text-xs text-white/25 truncate mt-0.5">{subtitle}</p>
-        </div>
+        <p className="flex-1 min-w-0 text-sm font-medium text-white/80 truncate">{title}</p>
+        <p className="text-xs text-white/25 shrink-0 whitespace-nowrap tabular-nums">{subtitle}</p>
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition duration-150 shrink-0">
           {item.kind === "link" ? (
             <>
@@ -330,6 +359,86 @@ function FullscreenOverlay({ children, onClose }: { children: React.ReactNode; o
   );
 }
 
+// ── Folder context menu ───────────────────────────────────────────────────────
+
+interface FolderCtxMenu {
+  folderId: string;
+  folderName: string;
+  itemCount: number;
+  x: number;
+  y: number;
+}
+
+function FolderContextMenu({
+  menu,
+  isReadOnly,
+  zipping,
+  onClose,
+  onRename,
+  onDownload,
+  onDelete,
+}: {
+  menu: FolderCtxMenu;
+  isReadOnly: boolean;
+  zipping: boolean;
+  onClose: () => void;
+  onRename: () => void;
+  onDownload: () => void;
+  onDelete: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    function onClick(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onClick);
+    return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onClick); };
+  }, [onClose]);
+
+  // Clamp to viewport
+  const style: React.CSSProperties = { position: "fixed", zIndex: 9999, top: menu.y, left: menu.x };
+
+  return createPortal(
+    <div ref={ref} style={style}
+      className="min-w-[160px] rounded-xl border border-white/10 bg-zinc-900/95 backdrop-blur-md shadow-2xl py-1 text-sm overflow-hidden">
+
+      <button
+        onClick={() => { onDownload(); onClose(); }}
+        disabled={zipping || menu.itemCount === 0}
+        className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left text-white/75 hover:bg-white/[0.07] disabled:opacity-40 disabled:cursor-default transition"
+      >
+        <Download className="h-3.5 w-3.5 shrink-0" />
+        {zipping ? "Zipping…" : "Download as zip"}
+        {menu.itemCount === 0 && <span className="ml-auto text-white/30 text-[10px]">empty</span>}
+      </button>
+
+      {!isReadOnly && (
+        <>
+          <div className="mx-2 my-1 h-px bg-white/[0.06]" />
+          <button
+            onClick={() => { onRename(); onClose(); }}
+            className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left text-white/75 hover:bg-white/[0.07] transition"
+          >
+            <Pencil className="h-3.5 w-3.5 shrink-0" />
+            Rename
+          </button>
+          <div className="mx-2 my-1 h-px bg-white/[0.06]" />
+          <button
+            onClick={() => { onDelete(); onClose(); }}
+            className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left text-red-400/70 hover:bg-red-500/[0.08] hover:text-red-400 transition"
+          >
+            <Trash2 className="h-3.5 w-3.5 shrink-0" />
+            Delete folder
+            {menu.itemCount > 0 && <span className="ml-auto text-[10px] opacity-50">{menu.itemCount} moved out</span>}
+          </button>
+        </>
+      )}
+    </div>,
+    document.body,
+  );
+}
+
 // ── Right files panel ─────────────────────────────────────────────────────────
 
 interface FilesPanelProps {
@@ -337,12 +446,14 @@ interface FilesPanelProps {
   folders:            { id: string; name: string }[];
   itemMeta:           Record<string, ItemMeta>;
   onCreateFolder:     () => void;
+  onRenameFolder:     (id: string, name: string) => void;
+  onDeleteFolder:     (id: string) => void;
   onMetaChange:       (id: string, m: Partial<ItemMeta>) => void;
   showCredentials:    boolean;
   onToggleCredentials: () => void;
 }
 
-function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaChange, showCredentials, onToggleCredentials }: FilesPanelProps) {
+function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onRenameFolder, onDeleteFolder, onMetaChange, showCredentials, onToggleCredentials }: FilesPanelProps) {
   const { getLinks, getProjectFiles, uploadFile, deleteLink, deleteProjectFile, isReadOnly } = useProjects();
   const [addLinkOpen,      setAddLinkOpen]  = useState(false);
   const [dragOver,         setDragOver]     = useState(false);
@@ -355,6 +466,15 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
   const dragCounter  = useRef(0);
   const [draggedItemId,  setDraggedItemId]  = useState<string | null>(null);
   const [folderDragOver, setFolderDragOver] = useState<string | null>(null);
+  const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
+  const [renamingName,     setRenamingName]     = useState("");
+  const [zippingFolderId,  setZippingFolderId]  = useState<string | null>(null);
+  const [folderCtxMenu,    setFolderCtxMenu]    = useState<FolderCtxMenu | null>(null);
+  const [listDragOver,     setListDragOver]     = useState(false);
+  const [selectedIds,      setSelectedIds]      = useState<Set<string>>(new Set());
+  const [bulkMoveOpen,     setBulkMoveOpen]     = useState(false);
+  const [isBulkDownloading,setIsBulkDownloading]= useState(false);
+  const anchorId = useRef<string | null>(null);
 
   // Per-file upload progress: key → { name, progress 0-100, done }
   interface UploadItem { name: string; progress: number; done: boolean }
@@ -396,6 +516,53 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
     return groups;
   }, [visibleItems, folders, itemMeta]);
 
+  // Flat visual order of all visible items (respects collapsed folders — collapsed items skipped)
+  const flatOrder = useMemo(() => {
+    const ids: string[] = [];
+    folders.forEach(folder => {
+      if (!collapsedFolders.has(folder.id)) {
+        (folderGroups[folder.id] ?? []).forEach(item =>
+          ids.push(item.kind === "link" ? item.link.id : item.file.id));
+      }
+    });
+    folderGroups.__root__.forEach(item =>
+      ids.push(item.kind === "link" ? item.link.id : item.file.id));
+    return ids;
+  }, [folderGroups, folders, collapsedFolders]);
+
+  async function downloadFolder(folderId: string, folderName: string) {
+    const items = folderGroups[folderId] ?? [];
+    const fileItems = items.filter(i => i.kind === "file");
+    if (fileItems.length === 0) return;
+
+    setZippingFolderId(folderId);
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+
+      await Promise.all(fileItems.map(async (item) => {
+        if (item.kind !== "file") return;
+        try {
+          const res = await fetch(item.file.dataUrl);
+          const blob = await res.blob();
+          zip.file(item.file.name, blob);
+        } catch {
+          // skip files that fail (e.g. expired presigned URL)
+        }
+      }));
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${folderName}.zip`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } finally {
+      setZippingFolderId(null);
+    }
+  }
+
   async function ingestFiles(fileList: FileList | File[]) {
     const arr = Array.from(fileList); if (!arr.length) return;
     setUploading(true);
@@ -433,6 +600,70 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
 
   function getMeta(id: string): ItemMeta { return itemMeta[id] ?? { folderId: null, tags: [] }; }
   function toggleFolder(id: string) { setCollapsed(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; }); }
+
+  // Toggle select with shift-click range support
+  const handleToggleSelect = useCallback((id: string, e: React.MouseEvent) => {
+    if (e.shiftKey && anchorId.current) {
+      const anchorIdx = flatOrder.indexOf(anchorId.current);
+      const clickIdx  = flatOrder.indexOf(id);
+      if (anchorIdx !== -1 && clickIdx !== -1) {
+        const [start, end] = anchorIdx < clickIdx ? [anchorIdx, clickIdx] : [clickIdx, anchorIdx];
+        const range = flatOrder.slice(start, end + 1);
+        setSelectedIds(prev => { const s = new Set(prev); range.forEach(rid => s.add(rid)); return s; });
+        return; // keep anchor unchanged on shift-click
+      }
+    }
+    // Regular click: toggle + set new anchor
+    anchorId.current = id;
+    setSelectedIds(prev => {
+      const s = new Set(prev);
+      s.has(id) ? s.delete(id) : s.add(id);
+      return s;
+    });
+  }, [flatOrder]);
+
+  // Keyboard shortcuts: Cmd/Ctrl+A to select all visible, Escape to clear
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") { setSelectedIds(new Set()); setBulkMoveOpen(false); anchorId.current = null; return; }
+      if ((e.metaKey || e.ctrlKey) && e.key === "a") {
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+        e.preventDefault();
+        setSelectedIds(new Set(allItems.map(item => item.kind === "link" ? item.link.id : item.file.id)));
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [allItems]);
+
+  // Bulk operations
+  function handleBulkMove(folderId: string | null) {
+    selectedIds.forEach(id => onMetaChange(id, { folderId }));
+    setSelectedIds(new Set()); setBulkMoveOpen(false);
+  }
+  async function handleBulkDownload() {
+    const fileItems = allItems.filter(item => item.kind === "file" && selectedIds.has(item.file.id)) as { kind: "file"; file: ProjectFile }[];
+    if (!fileItems.length) return;
+    setIsBulkDownloading(true);
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      await Promise.all(fileItems.map(async item => {
+        try { const res = await fetch(item.file.dataUrl); zip.file(item.file.name, await res.blob()); } catch { /* skip */ }
+      }));
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement("a"); a.href = url; a.download = "selected-files.zip"; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } finally { setIsBulkDownloading(false); }
+  }
+  function handleBulkDelete() {
+    selectedIds.forEach(id => {
+      if (files.some(f => f.id === id)) deleteProjectFile(id); else deleteLink(id);
+    });
+    setSelectedIds(new Set());
+  }
 
   const empty = links.length === 0 && files.length === 0;
 
@@ -574,7 +805,32 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
         </div>
       ) : (
         /* ── List view ── */
-        <div className="flex-1 overflow-y-auto space-y-4 min-h-0 pb-16">
+        <div
+          className={cn(
+            "flex-1 overflow-y-auto space-y-4 min-h-0 pb-16 rounded-2xl transition-all duration-150",
+            listDragOver && "outline outline-2 outline-dashed outline-primary/25 outline-offset-[-2px] bg-primary/[0.02]",
+          )}
+          onDragOver={(e) => {
+            if (!draggedItemId) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            setListDragOver(true);
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) setListDragOver(false);
+          }}
+          onDrop={(e) => {
+            if (!draggedItemId) return;
+            e.preventDefault();
+            const ids = selectedIds.has(draggedItemId) && selectedIds.size > 1
+              ? [...selectedIds]
+              : [draggedItemId];
+            ids.forEach(id => onMetaChange(id, { folderId: null }));
+            setDraggedItemId(null);
+            setListDragOver(false);
+            setFolderDragOver(null);
+          }}
+        >
           {folders.map(folder => {
             const items    = folderGroups[folder.id] ?? [];
             const collapsed = collapsedFolders.has(folder.id);
@@ -582,38 +838,85 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
             return (
               <section
                 key={folder.id}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  // Clamp to viewport
+                  const x = Math.min(e.clientX, window.innerWidth  - 200);
+                  const y = Math.min(e.clientY, window.innerHeight - 120);
+                  setFolderCtxMenu({ folderId: folder.id, folderName: folder.name, itemCount: items.length, x, y });
+                }}
                 onDragOver={(e) => {
                   if (!draggedItemId) return;
                   e.preventDefault();
+                  e.stopPropagation(); // don't bubble to list container
                   e.dataTransfer.dropEffect = "move";
                   setFolderDragOver(folder.id);
+                  setListDragOver(false);
                 }}
                 onDragLeave={(e) => {
                   if (!e.currentTarget.contains(e.relatedTarget as Node)) setFolderDragOver(null);
                 }}
                 onDrop={(e) => {
                   e.preventDefault();
-                  if (draggedItemId) { onMetaChange(draggedItemId, { folderId: folder.id }); setDraggedItemId(null); }
+                  e.stopPropagation(); // don't bubble to list container
+                  if (draggedItemId) {
+                    const ids = selectedIds.has(draggedItemId) && selectedIds.size > 1
+                      ? [...selectedIds]
+                      : [draggedItemId];
+                    ids.forEach(id => onMetaChange(id, { folderId: folder.id }));
+                    setDraggedItemId(null);
+                  }
                   setFolderDragOver(null);
                 }}
               >
-                <button onClick={() => toggleFolder(folder.id)}
+                <button
+                  onClick={() => toggleFolder(folder.id)}
                   className={cn(
-                    "flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widest mb-2 px-2 py-1 rounded-xl transition w-full text-left",
+                    "flex items-center gap-3 px-4 py-3 rounded-2xl border transition w-full text-left mb-1.5",
                     isTarget
-                      ? "text-primary/80 bg-primary/10 border border-primary/20"
-                      : "text-white/40 hover:text-white/60 border border-transparent"
+                      ? "text-primary/80 bg-primary/10 border-primary/20"
+                      : "text-white/60 bg-white/[0.02] border-white/[0.06] hover:border-white/10 hover:bg-white/[0.04]"
                   )}>
-                  <ChevronRight className={cn("h-3 w-3 transition-transform duration-150", !collapsed && "rotate-90")} />
-                  <FolderOpen className="h-3 w-3" />
-                  {folder.name}
-                  <span className="ml-1 text-white/20 normal-case font-normal tracking-normal">({items.length})</span>
-                  {isTarget && <span className="ml-auto text-[10px] text-primary/60 normal-case font-normal tracking-normal">Drop to move</span>}
+                  <div className="w-8 h-8 rounded-xl bg-white/[0.06] flex items-center justify-center shrink-0">
+                    <FolderOpen className={cn("h-4 w-4", isTarget ? "text-primary/70" : "text-amber-400/70")} />
+                  </div>
+                  <ChevronRight className={cn("h-3 w-3 shrink-0 transition-transform duration-150 text-white/30", !collapsed && "rotate-90")} />
+                  {renamingFolderId === folder.id ? (
+                    <input
+                      autoFocus
+                      value={renamingName}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => setRenamingName(e.target.value)}
+                      onBlur={() => {
+                        const trimmed = renamingName.trim();
+                        if (trimmed) onRenameFolder(folder.id, trimmed);
+                        setRenamingFolderId(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const trimmed = renamingName.trim();
+                          if (trimmed) onRenameFolder(folder.id, trimmed);
+                          setRenamingFolderId(null);
+                        } else if (e.key === "Escape") {
+                          setRenamingFolderId(null);
+                        }
+                        e.stopPropagation();
+                      }}
+                      className="bg-transparent border-b border-primary/50 outline-none text-primary/80 font-medium min-w-0 flex-1 text-sm"
+                    />
+                  ) : (
+                    <span className="text-sm font-medium flex-1 min-w-0 truncate">{folder.name}</span>
+                  )}
+                  <span className="text-xs text-white/25 tabular-nums shrink-0">{items.length} item{items.length !== 1 ? "s" : ""}</span>
+                  {zippingFolderId === folder.id && (
+                    <span className="shrink-0 h-3 w-3 inline-block border border-current border-t-transparent rounded-full animate-spin text-white/40" />
+                  )}
+                  {isTarget && <span className="text-[10px] text-primary/60 shrink-0">Drop here</span>}
                 </button>
                 {!collapsed && (
-                  <div className="space-y-1.5">
+                  <div className="ml-4 pl-3 border-l border-white/[0.07] space-y-1.5 mt-1.5">
                     {items.length === 0 ? (
-                      <p className={cn("text-[11px] px-4 py-2", isTarget ? "text-primary/50" : "text-white/20")}>
+                      <p className={cn("text-[11px] px-2 py-2", isTarget ? "text-primary/50" : "text-white/20")}>
                         {isTarget ? "Release to move here" : "Empty folder"}
                       </p>
                     ) : items.map(item => {
@@ -625,6 +928,9 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
                           isDragging={draggedItemId === id}
                           onItemDragStart={setDraggedItemId}
                           onItemDragEnd={() => { setDraggedItemId(null); setFolderDragOver(null); }}
+                          isSelected={selectedIds.has(id)}
+                          showCheckbox={selectedIds.size > 0}
+                          onToggleSelect={handleToggleSelect}
                         />
                       );
                     })}
@@ -638,15 +944,24 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
               onDragOver={(e) => {
                 if (!draggedItemId) return;
                 e.preventDefault();
+                e.stopPropagation(); // don't bubble to list container
                 e.dataTransfer.dropEffect = "move";
                 setFolderDragOver("__root__");
+                setListDragOver(false);
               }}
               onDragLeave={(e) => {
                 if (!e.currentTarget.contains(e.relatedTarget as Node)) setFolderDragOver(null);
               }}
               onDrop={(e) => {
                 e.preventDefault();
-                if (draggedItemId) { onMetaChange(draggedItemId, { folderId: null }); setDraggedItemId(null); }
+                e.stopPropagation(); // don't bubble to list container
+                if (draggedItemId) {
+                  const ids = selectedIds.has(draggedItemId) && selectedIds.size > 1
+                    ? [...selectedIds]
+                    : [draggedItemId];
+                  ids.forEach(id => onMetaChange(id, { folderId: null }));
+                  setDraggedItemId(null);
+                }
                 setFolderDragOver(null);
               }}
             >
@@ -670,6 +985,9 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
                       isDragging={draggedItemId === id}
                       onItemDragStart={setDraggedItemId}
                       onItemDragEnd={() => { setDraggedItemId(null); setFolderDragOver(null); }}
+                      isSelected={selectedIds.has(id)}
+                      showCheckbox={selectedIds.size > 0}
+                      onToggleSelect={handleToggleSelect}
                     />
                   );
                 })}
@@ -719,6 +1037,86 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onMetaC
         </div>,
         document.body,
       )}
+
+      {/* Folder right-click context menu */}
+      {folderCtxMenu && (
+        <FolderContextMenu
+          menu={folderCtxMenu}
+          isReadOnly={isReadOnly}
+          zipping={zippingFolderId === folderCtxMenu.folderId}
+          onClose={() => setFolderCtxMenu(null)}
+          onRename={() => {
+            setRenamingFolderId(folderCtxMenu.folderId);
+            setRenamingName(folderCtxMenu.folderName);
+          }}
+          onDownload={() => downloadFolder(folderCtxMenu.folderId, folderCtxMenu.folderName)}
+          onDelete={() => onDeleteFolder(folderCtxMenu.folderId)}
+        />
+      )}
+
+      {/* ── Bulk action bar ── */}
+      {selectedIds.size > 0 && createPortal(
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-white/15 bg-zinc-900/95 backdrop-blur-md shadow-2xl">
+          <span className="text-xs font-semibold text-white/50 pr-1">{selectedIds.size} selected</span>
+          <div className="w-px h-4 bg-white/[0.08]" />
+
+          {/* Move to folder */}
+          {folders.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={(e) => { e.stopPropagation(); setBulkMoveOpen(v => !v); }}
+                className="h-7 px-3 text-xs rounded-full border border-white/10 text-white/60 hover:text-white/90 hover:border-white/20 flex items-center gap-1.5 transition"
+              >
+                <FolderOpen className="h-3 w-3" /> Move to…
+              </button>
+              {bulkMoveOpen && (
+                <div className="absolute bottom-full mb-2 left-0 w-44 rounded-xl border border-white/10 bg-zinc-900/98 backdrop-blur-md py-1 shadow-xl z-10">
+                  <button onClick={() => handleBulkMove(null)}
+                    className="w-full text-left px-3 py-1.5 text-xs text-white/50 hover:bg-white/[0.05] hover:text-white/80 transition">
+                    No folder (unfolder)
+                  </button>
+                  <div className="mx-2 my-0.5 h-px bg-white/[0.06]" />
+                  {folders.map(f => (
+                    <button key={f.id} onClick={() => handleBulkMove(f.id)}
+                      className="w-full text-left px-3 py-1.5 text-xs text-white/50 hover:bg-white/[0.05] hover:text-white/80 transition">
+                      {f.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Download zip (files only) */}
+          <button
+            onClick={handleBulkDownload}
+            disabled={isBulkDownloading}
+            className="h-7 px-3 text-xs rounded-full border border-white/10 text-white/60 hover:text-white/90 hover:border-white/20 flex items-center gap-1.5 transition disabled:opacity-40"
+          >
+            <Download className="h-3 w-3" />
+            {isBulkDownloading ? "Zipping…" : "Download zip"}
+          </button>
+
+          {/* Delete */}
+          {!isReadOnly && (
+            <button
+              onClick={handleBulkDelete}
+              className="h-7 px-3 text-xs rounded-full border border-red-500/15 text-red-400/60 hover:text-red-400/90 hover:border-red-500/30 hover:bg-red-500/5 flex items-center gap-1.5 transition"
+            >
+              <Trash2 className="h-3 w-3" /> Delete
+            </button>
+          )}
+
+          <div className="w-px h-4 bg-white/[0.08]" />
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="h-7 w-7 rounded-full border border-white/10 text-white/40 hover:text-white/80 hover:border-white/20 flex items-center justify-center transition"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 
@@ -761,15 +1159,89 @@ export function FilesView({ projectId, project, initialBranches, initialContribs
   const [commitsFullscreen,  setCommitsFullscreen]  = useState(false);
   const [showCredentials,   setShowCredentials]   = useState(false);
 
+  // ── Load folders from DB on mount ──────────────────────────────────────────
+  useEffect(() => {
+    fetch(`/api/folders?projectId=${encodeURIComponent(projectId)}`)
+      .then(async res => {
+        const json = await res.json();
+        if (!res.ok) { console.error("[Chronicle] GET /api/folders failed:", json); return; }
+        console.log("[Chronicle] folders loaded:", json);
+        setFolders((json as { id: string; name: string }[]).map(r => ({ id: r.id, name: r.name })));
+      })
+      .catch(err => console.error("[Chronicle] folders fetch error:", err));
+  }, [projectId]);
+
+  // ── Seed itemMeta from DB-loaded folderId/tags (once files/links arrive) ──
+  const metaSeeded = useRef(false);
+  useEffect(() => {
+    if (metaSeeded.current) return;
+    if (files.length === 0 && links.length === 0) return;
+    const seed: Record<string, ItemMeta> = {};
+    for (const f of files) seed[f.id] = { folderId: f.folderId, tags: f.tags };
+    for (const l of links) seed[l.id] = { folderId: l.folderId, tags: l.tags };
+    setItemMeta(seed);
+    metaSeeded.current = true;
+  }, [files, links]);
+
+  // ── Folder CRUD (persisted) ────────────────────────────────────────────────
   function createFolder() {
-    const id = "fld_" + Math.random().toString(36).slice(2, 9);
-    setFolders(prev => [...prev, { id, name: "New folder" }]);
+    // Optimistic: add immediately with a temp ID so the button responds instantly
+    const tempId = "fld_" + Math.random().toString(36).slice(2, 9);
+    setFolders(prev => [...prev, { id: tempId, name: "New folder" }]);
+
+    dbCreateFolder(projectId, "New folder")
+      .then(row => {
+        // Swap the temp ID for the real DB UUID
+        setFolders(prev => prev.map(f => f.id === tempId ? { id: row.id, name: row.name } : f));
+        // Also fix any itemMeta that got assigned to the temp ID during the brief window
+        setItemMeta(prev => {
+          const next = { ...prev };
+          for (const [k, v] of Object.entries(next)) {
+            if (v.folderId === tempId) next[k] = { ...v, folderId: row.id };
+          }
+          return next;
+        });
+      })
+      .catch(err => {
+        console.error("[Chronicle] createFolder failed:", err);
+        setFolders(prev => prev.filter(f => f.id !== tempId));
+      });
   }
+
+  function renameFolder(id: string, name: string) {
+    setFolders(prev => prev.map(f => f.id === id ? { ...f, name } : f));
+    dbRenameFolder(id, projectId, name).catch(console.error);
+  }
+
+  function deleteFolder(id: string) {
+    // Optimistic: remove folder and un-assign any items that were in it
+    setFolders(prev => prev.filter(f => f.id !== id));
+    setItemMeta(prev => {
+      const next = { ...prev };
+      for (const [k, v] of Object.entries(next)) {
+        if (v.folderId === id) next[k] = { ...v, folderId: null };
+      }
+      return next;
+    });
+    import("@/lib/db/files").then(({ deleteFolder: dbDeleteFolder }) =>
+      dbDeleteFolder(id, projectId).catch(console.error)
+    );
+  }
+
+  // ── Item-meta change (persisted) ──────────────────────────────────────────
   function updateMeta(id: string, patch: Partial<ItemMeta>) {
     setItemMeta(prev => {
       const cur = prev[id] ?? { folderId: null, tags: [] };
       return { ...prev, [id]: { ...cur, ...patch } };
     });
+    // Persist folder / tags assignment to DB
+    const dbPatch: Record<string, unknown> = {};
+    if ("folderId" in patch) dbPatch.folder_id = patch.folderId ?? null;
+    if ("tags"     in patch) dbPatch.tags       = patch.tags    ?? [];
+    if (Object.keys(dbPatch).length === 0) return;
+    const isFile = files.some(f => f.id === id);
+    if (isFile) dbUpdateFile(id, projectId, dbPatch as Parameters<typeof dbUpdateFile>[2]).catch(console.error);
+    else        dbUpdateLink(id, projectId, dbPatch as Parameters<typeof dbUpdateLink>[2]).catch(console.error);
   }
 
   return (
@@ -832,6 +1304,8 @@ export function FilesView({ projectId, project, initialBranches, initialContribs
             folders={folders}
             itemMeta={itemMeta}
             onCreateFolder={createFolder}
+            onRenameFolder={renameFolder}
+            onDeleteFolder={deleteFolder}
             onMetaChange={updateMeta}
             showCredentials={showCredentials}
             onToggleCredentials={() => setShowCredentials(true)}

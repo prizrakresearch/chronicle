@@ -65,6 +65,8 @@ export async function getPublicProject(id: string): Promise<PublicProjectData | 
       dataUrl,
       s3Key:     f.storage_path,
       createdAt: f.created_at,
+      folderId:  f.folder_id ?? null,
+      tags:      f.tags      ?? [],
     } satisfies ProjectFile;
   }));
 

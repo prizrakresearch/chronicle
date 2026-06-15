@@ -517,15 +517,15 @@ export const MOCK_ROADMAP_ITEMS: RoadmapItem[] = [
 
 export const MOCK_LINKS: ProjectLink[] = [
   // Chronicle
-  { id: "lnk_c1", projectId: "proj_chronicle", title: "GitHub Repository", url: "https://github.com/adyothuria/chronicle", type: "github" },
-  { id: "lnk_c2", projectId: "proj_chronicle", title: "Production", url: "https://chronicle.vercel.app", type: "production" },
+  { id: "lnk_c1", projectId: "proj_chronicle", title: "GitHub Repository", url: "https://github.com/adyothuria/chronicle", type: "github",     folderId: null, tags: [] },
+  { id: "lnk_c2", projectId: "proj_chronicle", title: "Production",        url: "https://chronicle.vercel.app",           type: "production", folderId: null, tags: [] },
 
   // Portfolio
-  { id: "lnk_p1", projectId: "proj_portfolio", title: "Live Site", url: "https://adyothuria.com", type: "production" },
-  { id: "lnk_p2", projectId: "proj_portfolio", title: "Figma Design", url: "https://figma.com/file/example", type: "design" },
-  { id: "lnk_p3", projectId: "proj_portfolio", title: "Content Docs", url: "https://notion.so/portfolio-content", type: "docs" },
+  { id: "lnk_p1", projectId: "proj_portfolio", title: "Live Site",     url: "https://adyothuria.com",                   type: "production", folderId: null, tags: [] },
+  { id: "lnk_p2", projectId: "proj_portfolio", title: "Figma Design",  url: "https://figma.com/file/example",           type: "design",     folderId: null, tags: [] },
+  { id: "lnk_p3", projectId: "proj_portfolio", title: "Content Docs",  url: "https://notion.so/portfolio-content",      type: "docs",       folderId: null, tags: [] },
 
   // kv-cli
-  { id: "lnk_k1", projectId: "proj_kvcli", title: "GitHub Repository", url: "https://github.com/adyothuria/kv-cli", type: "github" },
-  { id: "lnk_k2", projectId: "proj_kvcli", title: "README / Docs", url: "https://github.com/adyothuria/kv-cli#readme", type: "docs" },
+  { id: "lnk_k1", projectId: "proj_kvcli", title: "GitHub Repository", url: "https://github.com/adyothuria/kv-cli",        type: "github", folderId: null, tags: [] },
+  { id: "lnk_k2", projectId: "proj_kvcli", title: "README / Docs",     url: "https://github.com/adyothuria/kv-cli#readme", type: "docs",   folderId: null, tags: [] },
 ];

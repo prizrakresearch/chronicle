@@ -144,6 +144,8 @@ export function toProjectLink(row: Row): ProjectLink {
     title:     row.title,
     url:       row.url,
     type:      row.type,
+    folderId:  row.folder_id ?? null,
+    tags:      row.tags      ?? [],
   };
 }
 

@@ -10,7 +10,7 @@ export default function SignUpPage() {
       <div className="mb-2 text-center">
         <h1
           className="text-2xl font-semibold text-white/80 tracking-wide"
-          style={{ fontFamily: "'The Seasons', serif" }}
+          style={{ fontFamily: "var(--font-playfair), serif" }}
         >
           Chronicle
         </h1>

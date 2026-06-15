@@ -73,7 +73,7 @@ interface Props {
 
 const noop      = () => {};
 const asyncNoop = async () => {};
-const fallbackProject: ProjectFile = { id: "", projectId: "", name: "", mimeType: "", size: 0, dataUrl: "", createdAt: "" };
+const fallbackProject: ProjectFile = { id: "", projectId: "", name: "", mimeType: "", size: 0, dataUrl: "", createdAt: "", folderId: null, tags: [] };
 
 export function ReadOnlyProjectsProvider({
   project, roadmapItems, timelineEvents, links, projectFiles, children,
@@ -103,7 +103,7 @@ export function ReadOnlyProjectsProvider({
 
     links,
     getLinks:  (pid) => links.filter((l) => l.projectId === pid),
-    addLink:   () => ({ id: "", projectId: project.id, title: "", url: "", type: "other" }),
+    addLink:   () => ({ id: "", projectId: project.id, title: "", url: "", type: "other", folderId: null, tags: [] }),
     deleteLink: noop,
 
     projectFiles,

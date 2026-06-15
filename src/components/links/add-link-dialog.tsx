@@ -47,7 +47,7 @@ export function AddLinkDialog({ projectId, open, onOpenChange }: AddLinkDialogPr
     if (!title.trim() || !url.trim()) return;
     setLoading(true);
     await new Promise((r) => setTimeout(r, 150));
-    addLink({ projectId, title: title.trim(), url: url.trim().startsWith("http") ? url.trim() : `https://${url.trim()}`, type });
+    addLink({ projectId, title: title.trim(), url: url.trim().startsWith("http") ? url.trim() : `https://${url.trim()}`, type, folderId: null, tags: [] });
     setLoading(false);
     reset();
     onOpenChange(false);
