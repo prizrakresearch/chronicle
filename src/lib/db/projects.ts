@@ -1,10 +1,10 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/supabase/server";
-import { getDownloadUrl } from "@/lib/s3/client";
+import { getDownloadUrl, deleteObject } from "@/lib/s3/client";
 import { revalidatePath } from "next/cache";
 import type { ProjectStatus } from "@/lib/supabase/types";
+import { requireOwner, requireAuth } from "./auth";
 
 /** Replace logo_url with a fresh presigned URL for any row that has logo_s3_key. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -20,25 +20,6 @@ async function resolveLogoUrls<T extends { logo_s3_key?: string | null; logo_url
   }));
 }
 
-// ── Auth helper ───────────────────────────────────────────────────────────────
-
-async function requireOwner() {
-  const { userId, sessionClaims } = await auth();
-  if (!userId) throw new Error("Unauthenticated");
-  const meta = (sessionClaims?.metadata ?? {}) as { role?: string };
-  if (meta.role !== "owner") throw new Error("Forbidden");
-  return userId;
-}
-
-async function requireAuth() {
-  const { userId, sessionClaims } = await auth();
-  if (!userId) throw new Error("Unauthenticated");
-  const meta = (sessionClaims?.metadata ?? {}) as { role?: string; expiresAt?: string };
-  if (!meta.role) throw new Error("Forbidden");
-  if (meta.expiresAt && new Date(meta.expiresAt) < new Date()) throw new Error("Forbidden");
-  return { userId, role: meta.role };
-}
-
 // ── Queries ───────────────────────────────────────────────────────────────────
 
 /**
@@ -47,13 +28,8 @@ async function requireAuth() {
  *   Guest  → only projects in project_shares for their Clerk ID
  */
 export async function getProjects() {
-  const { userId, sessionClaims } = await auth();
-  if (!userId) throw new Error("Unauthenticated");
-
-  const meta = (sessionClaims?.metadata ?? {}) as { role?: string; expiresAt?: string };
-  if (!meta.role) throw new Error("Forbidden");
-  if (meta.expiresAt && new Date(meta.expiresAt) < new Date()) throw new Error("Forbidden");
-  const isOwner = meta.role === "owner";
+  const { userId, role } = await requireAuth();
+  const isOwner = role === "owner";
 
   const FULL_SELECT = `
     *,
@@ -184,8 +160,35 @@ export async function updateProject(
 
 export async function deleteProject(id: string) {
   await requireOwner();
+
+  // Collect all S3 keys before deleting the DB rows
+  const [{ data: project }, { data: files }] = await Promise.all([
+    db.from("projects").select("logo_s3_key").eq("id", id).single(),
+    db.from("project_files").select("storage_path").eq("project_id", id),
+  ]);
+
+  // Delete all file versions' S3 objects too
+  const fileIds = (files ?? []).map((f: { storage_path: string }) => f.storage_path).filter(Boolean);
+  const { data: versions } = fileIds.length
+    ? await db.from("file_versions").select("storage_path").in("file_id",
+        // need file IDs, re-fetch them
+        (await db.from("project_files").select("id").eq("project_id", id)).data?.map((f: { id: string }) => f.id) ?? []
+      )
+    : { data: [] };
+
+  // Delete from DB (cascade handles child rows)
   const { error } = await db.from("projects").delete().eq("id", id);
   if (error) throw error;
+
+  // Clean up S3 — fire and forget, don't block or fail the delete
+  const s3Keys = [
+    (project as { logo_s3_key?: string | null } | null)?.logo_s3_key,
+    ...(files ?? []).map((f: { storage_path: string }) => f.storage_path),
+    ...(versions ?? []).map((v: { storage_path: string }) => v.storage_path),
+  ].filter(Boolean) as string[];
+
+  await Promise.allSettled(s3Keys.map((k) => deleteObject(k)));
+
   revalidatePath("/");
 }
 

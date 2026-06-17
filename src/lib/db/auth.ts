@@ -1,20 +1,46 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { db } from "@/lib/supabase/server";
+
+async function getClerkPublicMeta(userId: string): Promise<{ role?: string; expiresAt?: string }> {
+  const client = await clerkClient();
+  const user = await client.users.getUser(userId);
+  return user.publicMetadata as { role?: string; expiresAt?: string };
+}
 
 export async function requireAuth(): Promise<{ userId: string; role: string }> {
   const { userId, sessionClaims } = await auth();
   if (!userId) throw new Error("Unauthenticated");
   const meta = (sessionClaims?.metadata ?? {}) as { role?: string; expiresAt?: string };
-  if (!meta.role) throw new Error("Forbidden");
-  if (meta.expiresAt && new Date(meta.expiresAt) < new Date()) throw new Error("Forbidden");
-  return { userId, role: meta.role };
+
+  let role = meta.role;
+  let expiresAt = meta.expiresAt;
+
+  // JWT may be stale or missing the custom "metadata" claim — fall back to Clerk API
+  if (!role) {
+    const pub = await getClerkPublicMeta(userId);
+    role = pub.role;
+    expiresAt = expiresAt ?? pub.expiresAt;
+  }
+
+  if (!role) throw new Error("Forbidden");
+  if (expiresAt && new Date(expiresAt) < new Date()) throw new Error("Forbidden");
+  return { userId, role };
 }
 
 export async function requireOwner(): Promise<string> {
   const { userId, sessionClaims } = await auth();
   if (!userId) throw new Error("Unauthenticated");
   const meta = (sessionClaims?.metadata ?? {}) as { role?: string };
-  if (meta.role !== "owner") throw new Error("Forbidden");
+
+  let role = meta.role;
+
+  // JWT may be stale or missing the custom "metadata" claim — fall back to Clerk API
+  if (role !== "owner") {
+    const pub = await getClerkPublicMeta(userId);
+    role = pub.role;
+  }
+
+  if (role !== "owner") throw new Error("Forbidden");
   return userId;
 }
 

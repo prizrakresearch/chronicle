@@ -32,11 +32,23 @@ export async function saveProjectLogoKey(
   s3Key: string,
 ): Promise<string> {
   await requireOwner();
+
+  // Fetch old key before overwriting so we can clean it up
+  const { data: existing } = await db
+    .from("projects")
+    .select("logo_s3_key")
+    .eq("id", projectId)
+    .single();
+
   const { error } = await db
     .from("projects")
     .update({ logo_s3_key: s3Key, logo_url: null })
     .eq("id", projectId);
   if (error) throw error;
+
+  // Delete old logo from S3 if it existed
+  const oldKey = (existing as { logo_s3_key?: string | null } | null)?.logo_s3_key;
+  if (oldKey && oldKey !== s3Key) deleteObject(oldKey).catch(() => {});
 
   revalidatePath(`/projects/${projectId}`);
   return getDownloadUrl(s3Key, 3600);
