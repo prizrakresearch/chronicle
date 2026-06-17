@@ -215,19 +215,19 @@ export function ProjectGrid() {
       <div className="flex-1 flex overflow-hidden">
 
         {/* Left column (60% tablet / 70% desktop) */}
-        <div className="w-[60%] lg:w-[70%] flex flex-col">
+        <div className="w-[60%] xl:w-[70%] flex flex-col">
 
           <div ref={headerRef} className="shrink-0 z-20">
             <div className="px-6 pt-2 pb-6 flex items-center justify-between gap-6">
               <div className="shrink-0">
-                <h2 className="text-2xl lg:text-4xl font-bold text-white/90 tracking-tight">Dashboard</h2>
+                <h2 className="text-2xl xl:text-4xl font-bold text-white/90 tracking-tight">Dashboard</h2>
                 <p className="mt-1 text-sm text-white/40">
                   {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
                 </p>
               </div>
 
               <div className="flex items-center gap-2.5">
-                <div className="relative w-36 lg:w-52 group">
+                <div className="relative w-48 xl:w-52 group">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30 group-hover:text-primary/75 pointer-events-none transition duration-200 ease-in-out" />
                   <Input
                     placeholder="Search projects…"
@@ -237,7 +237,7 @@ export function ProjectGrid() {
                   />
                 </div>
                 {/* Compact filter dropdown — tablet only */}
-                <div ref={filterMenuRef} className="relative lg:hidden">
+                <div ref={filterMenuRef} className="relative xl:hidden">
                   <button
                     onClick={() => setFilterMenuOpen((o) => !o)}
                     className={cn(
@@ -277,7 +277,7 @@ export function ProjectGrid() {
                 </div>
 
                 {/* Individual filter buttons — desktop only */}
-                <div className="hidden lg:flex items-center gap-1.5">
+                <div className="hidden xl:flex items-center gap-1.5">
                   {STATUS_FILTERS.map((f) => (
                     <button
                       key={f.value}
@@ -397,10 +397,10 @@ export function ProjectGrid() {
         </div>
 
         {/* Right column (40% tablet / 30% desktop) */}
-        <div className="w-[40%] lg:w-[30%] flex flex-col overflow-hidden">
+        <div className="w-[40%] xl:w-[30%] flex flex-col overflow-hidden">
 
           {/* Tab toggle — tablet only */}
-          <div className="lg:hidden shrink-0 flex gap-1.5 px-3 py-2">
+          <div className="xl:hidden shrink-0 flex gap-1.5 px-3 py-2">
             <button
               onClick={() => setRightTab("calendar")}
               className={cn(
@@ -424,8 +424,8 @@ export function ProjectGrid() {
           {/* Calendar panel */}
           <div className={cn(
             rightTab === "calendar"
-              ? "flex flex-col flex-1 p-3 pt-1 lg:flex-none lg:h-1/2 lg:p-4 lg:pb-2"
-              : "hidden lg:flex lg:flex-col lg:h-1/2 lg:p-4 lg:pb-2"
+              ? "flex flex-col flex-1 p-3 pt-1 xl:flex-none xl:h-1/2 xl:p-4 xl:pb-2"
+              : "hidden xl:flex xl:flex-col xl:h-1/2 xl:p-4 xl:pb-2"
           )}>
             <div className="flex-1 rounded-[28px] border border-border/50 bg-black/50 overflow-hidden">
               <CalendarPanel />
@@ -435,8 +435,8 @@ export function ProjectGrid() {
           {/* Notes panel */}
           <div className={cn(
             rightTab === "notes"
-              ? "flex flex-col flex-1 p-3 pt-1 lg:flex-none lg:h-1/2 lg:p-4 lg:pt-2"
-              : "hidden lg:flex lg:flex-col lg:h-1/2 lg:p-4 lg:pt-2"
+              ? "flex flex-col flex-1 p-3 pt-1 xl:flex-none xl:h-1/2 xl:p-4 xl:pt-2"
+              : "hidden xl:flex xl:flex-col xl:h-1/2 xl:p-4 xl:pt-2"
           )}>
             <div className="flex-1 rounded-[28px] border border-border/50 bg-black/50 overflow-hidden">
               <NotesPanel />

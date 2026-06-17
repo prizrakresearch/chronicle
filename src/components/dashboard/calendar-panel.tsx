@@ -140,7 +140,7 @@ export function CalendarPanel() {
       </div>
 
       {/* ── Day grid ── */}
-      <div className="grid grid-cols-7 gap-y-0.5 md:gap-y-1 lg:gap-y-0.5 shrink-0">
+      <div className="grid grid-cols-7 gap-y-0.5 md:gap-y-1 xl:gap-y-0.5 shrink-0">
         {Array.from({ length: offset }).map((_, i) => <div key={`pad-${i}`} />)}
         {Array.from({ length: daysInMonth }).map((_, i) => {
           const day = i + 1;
@@ -156,8 +156,8 @@ export function CalendarPanel() {
               key={day}
               onClick={() => selectDay(iso)}
               className={cn(
-                "relative mx-auto flex items-center justify-center w-7 h-7 md:w-9 md:h-9 lg:w-7 lg:h-7 rounded-full",
-                "text-xs md:text-sm lg:text-xs font-medium transition duration-200 ease-in-out",
+                "relative mx-auto flex items-center justify-center w-7 h-7 md:w-9 md:h-9 xl:w-7 xl:h-7 rounded-full",
+                "text-xs md:text-sm xl:text-xs font-medium transition duration-200 ease-in-out",
                 isSel   && "bg-primary/80 text-black",
                 isToday && !isSel && "bg-primary/15 text-primary/90",
                 !isToday && !isSel && isWeekend  && "text-violet-400/70 hover:bg-violet-400/10 hover:text-violet-400",
