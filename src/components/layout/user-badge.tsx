@@ -140,9 +140,7 @@ export function UserBadge() {
             >
               <GithubIcon className="h-3.5 w-3.5 shrink-0" />
               <span className="flex-1 text-left">GitHub</span>
-              {hasGithubToken && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/80 shrink-0" />
-              )}
+              {hasGithubToken && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/80 shrink-0" />}
             </button>
           )}
           {/* Owner-only: manage guest access */}

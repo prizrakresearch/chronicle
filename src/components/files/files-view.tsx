@@ -7,6 +7,7 @@ import {
   Copy, Check, Trash2, ExternalLink, Download,
   FolderPlus, FolderOpen, ChevronRight, X, Hash,
   LayoutList, LayoutGrid, Maximize2, Minimize2, KeyRound, CheckCircle2, Pencil, Eye, Activity,
+  FileSpreadsheet, Presentation, PenTool,
 } from "lucide-react";
 import { FilePreview } from "./file-preview";
 import { TrashPanel  } from "./trash-panel";
@@ -520,6 +521,86 @@ function FolderContextMenu({
   );
 }
 
+// ── Google file creation ──────────────────────────────────────────────────────
+
+const GOOGLE_FILE_TYPES = [
+  { id: "sheet",   label: "Google Sheet",   shortLabel: "Sheet",   color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20", Icon: FileSpreadsheet, createUrl: "https://docs.google.com/spreadsheets/create" },
+  { id: "doc",     label: "Google Doc",     shortLabel: "Doc",     color: "text-blue-400",    bg: "bg-blue-500/10 border-blue-500/20",       Icon: FileText,        createUrl: "https://docs.google.com/document/create"      },
+  { id: "slide",   label: "Google Slide",   shortLabel: "Slide",   color: "text-amber-400",   bg: "bg-amber-500/10 border-amber-500/20",     Icon: Presentation,    createUrl: "https://docs.google.com/presentation/create"  },
+  { id: "drawing", label: "Google Drawing", shortLabel: "Drawing", color: "text-violet-400",  bg: "bg-violet-500/10 border-violet-500/20",   Icon: PenTool,         createUrl: "https://docs.google.com/drawings/create"      },
+] as const;
+
+type GoogleFileType = (typeof GOOGLE_FILE_TYPES)[number];
+
+function AddButton({ onAddLink, onUpload }: { onAddLink: () => void; onUpload: () => void }) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    function onMouseDown(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setDropdownOpen(false);
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [dropdownOpen]);
+
+  function handleGoogleClick(type: GoogleFileType) {
+    window.open(type.createUrl, "_blank", "noopener,noreferrer");
+    setDropdownOpen(false);
+    onAddLink();
+  }
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <button
+        onClick={() => setDropdownOpen(v => !v)}
+        className={cn(
+          "h-9 px-4 text-xs font-semibold rounded-full border flex items-center gap-1.5 transition duration-200 hover:-translate-y-px active:translate-y-0",
+          dropdownOpen
+            ? "border-primary/60 text-primary/90 bg-primary/10"
+            : "border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10"
+        )}
+      >
+        <Plus className="h-3.5 w-3.5" />Add
+      </button>
+
+      {dropdownOpen && (
+        <div className="absolute top-full left-0 mt-2 z-50 w-56 rounded-2xl border border-white/[0.08] bg-black/80 shadow-2xl py-2">
+          {GOOGLE_FILE_TYPES.map((type) => (
+            <button
+              key={type.id}
+              onClick={() => handleGoogleClick(type)}
+              className="flex items-center gap-2.5 px-3 py-2 mx-1.5 text-left rounded-xl transition hover:bg-white/[0.06]"
+              style={{ width: "calc(100% - 12px)" }}
+            >
+              <type.Icon className={cn("h-4 w-4 shrink-0", type.color)} strokeWidth={1.5} />
+              <span className="text-xs text-white/70 font-medium">{type.label}</span>
+            </button>
+          ))}
+          <div className="mx-3 my-1.5 h-px bg-white/[0.07]" />
+          <button
+            onClick={() => { setDropdownOpen(false); onAddLink(); }}
+            className="flex items-center gap-2.5 px-3 py-2 mx-1.5 text-left rounded-xl transition hover:bg-white/[0.06]"
+            style={{ width: "calc(100% - 12px)" }}
+          >
+            <Link2 className="h-4 w-4 shrink-0 text-zinc-400" strokeWidth={1.5} />
+            <span className="text-xs text-white/70 font-medium">Link</span>
+          </button>
+          <button
+            onClick={() => { setDropdownOpen(false); onUpload(); }}
+            className="flex items-center gap-2.5 px-3 py-2 mx-1.5 text-left rounded-xl transition hover:bg-white/[0.06]"
+            style={{ width: "calc(100% - 12px)" }}
+          >
+            <Upload className="h-4 w-4 shrink-0 text-zinc-400" strokeWidth={1.5} />
+            <span className="text-xs text-white/70 font-medium">Upload file</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Right files panel ─────────────────────────────────────────────────────────
 
 interface FilesPanelProps {
@@ -784,20 +865,13 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onRenam
       onDrop={!isReadOnly ? handleDrop : undefined}
     >
       {/* Toolbar */}
-      <div className="flex items-center gap-2 mb-3 pt-1 shrink-0 flex-wrap">
+      <div className="flex items-center gap-2 mb-3 pt-1 shrink-0">
         {!isReadOnly && (
           <>
-            <button onClick={() => setAddLinkOpen(true)}
-              className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 flex items-center gap-1.5 transition duration-200">
-              <Link2 className="h-3.5 w-3.5" />Add link
-            </button>
-            <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-              className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 flex items-center gap-1.5 transition duration-200 disabled:opacity-40">
-              <Upload className="h-3.5 w-3.5" />{uploading ? "Uploading…" : "Upload file"}
-            </button>
+            <AddButton onAddLink={() => setAddLinkOpen(true)} onUpload={() => fileInputRef.current?.click()} />
             <button onClick={onCreateFolder}
               className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 flex items-center gap-1.5 transition duration-200">
-              <FolderPlus className="h-3.5 w-3.5" />New folder
+              <FolderPlus className="h-3.5 w-3.5" />Folder
             </button>
             <button
               onClick={onToggleCredentials}

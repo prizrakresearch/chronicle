@@ -52,7 +52,6 @@ import {
   linkProjects   as dbLinkProjects,
   unlinkProjects as dbUnlinkProjects,
 } from "@/lib/db/relationships";
-
 // ── Context interface ──────────────────────────────────────────────────────────
 
 interface ProjectsContextValue {
@@ -132,7 +131,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
   const [roadmapItems,     setRoadmapItems]     = useState<RoadmapItem[]>([]);
   const [links,            setLinks]            = useState<ProjectLink[]>([]);
   const [projectFiles,     setProjectFiles]     = useState<ProjectFile[]>([]);
-  const [hasGithubTokenSt, setHasGithubToken]   = useState(false);
+  const [hasGithubTokenSt,   setHasGithubToken]    = useState(false);
   const [pin,              setPinState]         = useState<string | null>(() =>
     typeof window !== "undefined" ? localStorage.getItem("chronicle_pin") : null
   );
@@ -225,6 +224,7 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
             return false;
           });
           if (!cancelled) setHasGithubToken(tokenSet);
+
         }
       } catch (err) {
         console.error("[ProjectsContext] load failed:", err);
