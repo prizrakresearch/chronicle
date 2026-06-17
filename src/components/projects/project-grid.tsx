@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   Plus, Search, FolderOpen, LayoutGrid, Zap, PauseCircle, Archive,
-  EyeOff, Lock, Unlock, GitBranch,
+  EyeOff, Lock, Unlock, GitBranch, Filter,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,9 +38,13 @@ export function ProjectGrid() {
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const [pinDialogMode, setPinDialogMode] = useState<"unlock" | "setup">("unlock");
 
-  const scrollRef  = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const headerRef  = useRef<HTMLDivElement>(null);
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  const [rightTab,       setRightTab]       = useState<"calendar" | "notes">("calendar");
+
+  const scrollRef    = useRef<HTMLDivElement>(null);
+  const contentRef   = useRef<HTMLDivElement>(null);
+  const headerRef    = useRef<HTMLDivElement>(null);
+  const filterMenuRef = useRef<HTMLDivElement>(null);
 
   // ── Smooth transform scroll ──────────────────────────────────────────────────
   useEffect(() => {
@@ -81,6 +85,17 @@ export function ProjectGrid() {
       viewport.removeEventListener("wheel", onWheel);
       if (rafId) cancelAnimationFrame(rafId);
     };
+  }, []);
+
+  // Close filter dropdown when tapping outside (covers touch + mouse)
+  useEffect(() => {
+    const handler = (e: PointerEvent) => {
+      if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) {
+        setFilterMenuOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", handler);
+    return () => document.removeEventListener("pointerdown", handler);
   }, []);
 
   useEffect(() => {
@@ -199,20 +214,20 @@ export function ProjectGrid() {
       {/* 70 / 30 split */}
       <div className="flex-1 flex overflow-hidden">
 
-        {/* Left column (70%) */}
-        <div className="w-[70%] flex flex-col">
+        {/* Left column (60% tablet / 70% desktop) */}
+        <div className="w-[60%] lg:w-[70%] flex flex-col">
 
           <div ref={headerRef} className="shrink-0 z-20">
             <div className="px-6 pt-2 pb-6 flex items-center justify-between gap-6">
               <div className="shrink-0">
-                <h2 className="text-4xl font-bold text-white/90 tracking-tight">Dashboard</h2>
+                <h2 className="text-2xl lg:text-4xl font-bold text-white/90 tracking-tight">Dashboard</h2>
                 <p className="mt-1 text-sm text-white/40">
                   {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
                 </p>
               </div>
 
               <div className="flex items-center gap-2.5">
-                <div className="relative w-52 group">
+                <div className="relative w-36 lg:w-52 group">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30 group-hover:text-primary/75 pointer-events-none transition duration-200 ease-in-out" />
                   <Input
                     placeholder="Search projects…"
@@ -221,7 +236,48 @@ export function ProjectGrid() {
                     className="pl-9 h-11 bg-transparent border border-white/10 text-white/70 placeholder:text-white/30 text-sm rounded-full hover:border-primary/75 hover:text-primary/75 hover:placeholder:text-primary/40 focus-visible:ring-0 focus-visible:outline-none focus-visible:border-primary/75 transition duration-200 ease-in-out"
                   />
                 </div>
-                <div className="flex items-center gap-1.5">
+                {/* Compact filter dropdown — tablet only */}
+                <div ref={filterMenuRef} className="relative lg:hidden">
+                  <button
+                    onClick={() => setFilterMenuOpen((o) => !o)}
+                    className={cn(
+                      "h-11 px-4 rounded-full text-sm font-medium border flex items-center gap-2 transition duration-200 ease-in-out",
+                      statusFilter !== "all"
+                        ? "text-primary/75 border-primary/30 bg-primary/5"
+                        : "text-white/50 border-white/10 hover:text-white/70 hover:border-white/20"
+                    )}
+                  >
+                    <Filter className="h-3.5 w-3.5" />
+                    {statusFilter === "all" ? "Filters" : STATUS_FILTERS.find((f) => f.value === statusFilter)?.label}
+                  </button>
+                  {filterMenuOpen && (
+                    <div className="absolute right-0 top-full mt-1.5 z-50 bg-black/90 backdrop-blur-md border border-white/10 rounded-2xl p-1.5 shadow-xl min-w-[160px]">
+                      {STATUS_FILTERS.map((f) => (
+                        <button
+                          key={f.value}
+                          onClick={() => { setStatusFilter(f.value); setFilterMenuOpen(false); }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition duration-200 ease-in-out",
+                            statusFilter === f.value
+                              ? "bg-primary/15 text-primary/80"
+                              : "text-white/50 hover:bg-white/5 hover:text-white/80"
+                          )}
+                        >
+                          <span className={cn(
+                            "w-7 h-7 rounded-full flex items-center justify-center shrink-0",
+                            statusFilter === f.value ? "bg-primary/75" : "bg-zinc-800"
+                          )}>
+                            <span className={statusFilter === f.value ? "text-black" : ""}>{f.icon}</span>
+                          </span>
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Individual filter buttons — desktop only */}
+                <div className="hidden lg:flex items-center gap-1.5">
                   {STATUS_FILTERS.map((f) => (
                     <button
                       key={f.value}
@@ -340,18 +396,53 @@ export function ProjectGrid() {
 
         </div>
 
-        {/* Right column (30%): calendar + notes */}
-        <div className="w-[30%] flex flex-col">
-          <div className="h-1/2 flex flex-col p-4 pb-2">
+        {/* Right column (40% tablet / 30% desktop) */}
+        <div className="w-[40%] lg:w-[30%] flex flex-col overflow-hidden">
+
+          {/* Tab toggle — tablet only */}
+          <div className="lg:hidden shrink-0 flex gap-1.5 px-3 py-2">
+            <button
+              onClick={() => setRightTab("calendar")}
+              className={cn(
+                "flex-1 h-8 rounded-full text-xs font-medium border transition duration-200 ease-in-out",
+                rightTab === "calendar"
+                  ? "bg-primary/15 border-primary/30 text-primary/80"
+                  : "border-white/10 text-white/35 hover:text-white/60"
+              )}
+            >Calendar</button>
+            <button
+              onClick={() => setRightTab("notes")}
+              className={cn(
+                "flex-1 h-8 rounded-full text-xs font-medium border transition duration-200 ease-in-out",
+                rightTab === "notes"
+                  ? "bg-primary/15 border-primary/30 text-primary/80"
+                  : "border-white/10 text-white/35 hover:text-white/60"
+              )}
+            >Notes</button>
+          </div>
+
+          {/* Calendar panel */}
+          <div className={cn(
+            rightTab === "calendar"
+              ? "flex flex-col flex-1 p-3 pt-1 lg:flex-none lg:h-1/2 lg:p-4 lg:pb-2"
+              : "hidden lg:flex lg:flex-col lg:h-1/2 lg:p-4 lg:pb-2"
+          )}>
             <div className="flex-1 rounded-[28px] border border-border/50 bg-black/50 overflow-hidden">
               <CalendarPanel />
             </div>
           </div>
-          <div className="h-1/2 flex flex-col p-4 pt-2">
+
+          {/* Notes panel */}
+          <div className={cn(
+            rightTab === "notes"
+              ? "flex flex-col flex-1 p-3 pt-1 lg:flex-none lg:h-1/2 lg:p-4 lg:pt-2"
+              : "hidden lg:flex lg:flex-col lg:h-1/2 lg:p-4 lg:pt-2"
+          )}>
             <div className="flex-1 rounded-[28px] border border-border/50 bg-black/50 overflow-hidden">
               <NotesPanel />
             </div>
           </div>
+
         </div>
 
       </div>

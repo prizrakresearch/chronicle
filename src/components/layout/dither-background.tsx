@@ -221,6 +221,22 @@ export function DitherBackground({
     const t0 = performance.now();
     let raf = 0;
 
+    // Pause rendering during touch scroll to prevent iOS WebGL compositing glitch
+    let touchEndTimer: ReturnType<typeof setTimeout> | null = null;
+    const onTouchStart = () => {
+      if (touchEndTimer) { clearTimeout(touchEndTimer); touchEndTimer = null; }
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    };
+    const onTouchEnd = () => {
+      touchEndTimer = setTimeout(() => {
+        touchEndTimer = null;
+        if (!raf) raf = requestAnimationFrame(frame);
+      }, 150);
+    };
+    window.addEventListener("touchstart",  onTouchStart, { passive: true });
+    window.addEventListener("touchend",    onTouchEnd,   { passive: true });
+    window.addEventListener("touchcancel", onTouchEnd,   { passive: true });
+
     const frame = () => {
       const p = propsRef.current;
       const t = (performance.now() - t0) / 1000;
@@ -254,8 +270,12 @@ export function DitherBackground({
 
     return () => {
       cancelAnimationFrame(raf);
+      if (touchEndTimer) clearTimeout(touchEndTimer);
       ro.disconnect();
-      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mousemove",   onMove);
+      window.removeEventListener("touchstart",  onTouchStart);
+      window.removeEventListener("touchend",    onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
       gl.deleteProgram(prog);
       gl.deleteBuffer(vbo);
     };
@@ -265,7 +285,7 @@ export function DitherBackground({
     <canvas
       ref={canvasRef}
       className="fixed inset-0 w-full h-full"
-      style={{ zIndex: elevated ? 9997 : -10, backgroundColor: "black" }}
+      style={{ zIndex: elevated ? 9997 : -10, backgroundColor: "black", willChange: "transform" }}
     />
   );
 }
