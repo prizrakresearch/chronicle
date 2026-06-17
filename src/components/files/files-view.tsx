@@ -5,7 +5,7 @@ import {
   Plus, Link2, Upload, GitBranch, FileText, Globe, Palette,
   Image, Video, Music, Archive, Code2, File,
   Copy, Check, Trash2, ExternalLink, Download,
-  FolderPlus, FolderOpen, ChevronRight, X, Hash,
+  FolderPlus, FolderOpen, ChevronRight, ChevronLeft, X, Hash,
   LayoutList, LayoutGrid, Maximize2, Minimize2, KeyRound, CheckCircle2, Pencil, Eye, Activity,
   FileSpreadsheet, Presentation, PenTool,
 } from "lucide-react";
@@ -894,25 +894,25 @@ function RightFilesPanel({ projectId, folders, itemMeta, onCreateFolder, onRenam
             <button
               onClick={onToggleCredentials}
               className={cn(
-                "h-9 px-4 text-xs font-semibold rounded-full border flex items-center gap-1.5 transition duration-200 hover:-translate-y-px active:translate-y-0",
+                "h-9 px-2.5 xl:px-4 text-xs font-semibold rounded-full border flex items-center gap-1.5 transition duration-200 hover:-translate-y-px active:translate-y-0",
                 showCredentials
                   ? "border-primary/40 text-primary/75 bg-primary/10"
                   : "border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10"
               )}
             >
-              <KeyRound className="h-3.5 w-3.5" />Credentials
+              <KeyRound className="h-3.5 w-3.5" /><span className="hidden xl:inline">Credentials</span>
             </button>
             <button
               onClick={onToggleTrash}
-              className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-red-400/70 hover:border-red-500/30 hover:bg-red-500/5 flex items-center gap-1.5 transition duration-200 hover:-translate-y-px active:translate-y-0"
+              className="h-9 px-2.5 xl:px-4 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-red-400/70 hover:border-red-500/30 hover:bg-red-500/5 flex items-center gap-1.5 transition duration-200 hover:-translate-y-px active:translate-y-0"
             >
-              <Trash2 className="h-3.5 w-3.5" />Trash
+              <Trash2 className="h-3.5 w-3.5" /><span className="hidden xl:inline">Trash</span>
             </button>
             <button
               onClick={onToggleActivity}
-              className="h-9 px-4 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 flex items-center gap-1.5 transition duration-200 hover:-translate-y-px active:translate-y-0"
+              className="h-9 px-2.5 xl:px-4 text-xs font-semibold rounded-full border border-white/10 text-white/40 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 flex items-center gap-1.5 transition duration-200 hover:-translate-y-px active:translate-y-0"
             >
-              <Activity className="h-3.5 w-3.5" />Activity
+              <Activity className="h-3.5 w-3.5" /><span className="hidden xl:inline">Activity</span>
             </button>
             <input ref={fileInputRef} type="file" multiple className="sr-only"
               onChange={e => { if (e.target.files) ingestFiles(e.target.files); e.target.value = ""; }} />
@@ -1397,6 +1397,12 @@ export function FilesView({ projectId, project, initialBranches, initialContribs
   const [showCredentials,    setShowCredentials]    = useState(false);
   const [showTrash,          setShowTrash]          = useState(false);
   const [showActivity,       setShowActivity]       = useState(false);
+  const [sidebarCollapsed,   setSidebarCollapsed]   = useState(false);
+
+  // Default to collapsed on tablet (< 1280px)
+  useEffect(() => {
+    setSidebarCollapsed(window.innerWidth < 1280);
+  }, []);
 
   // ── Load folders from DB on mount ──────────────────────────────────────────
   useEffect(() => {
@@ -1486,17 +1492,43 @@ export function FilesView({ projectId, project, initialBranches, initialContribs
   return (
     <div className="h-full flex gap-0 min-h-0">
 
-      {/* ── Left: Git sidebar (~20%) ── */}
-      <div className="w-[18%] shrink-0 flex flex-col overflow-hidden border-r border-white/[0.05] pr-4">
-        <GitSidebar
-          project={project}
-          files={files}
-          links={links}
-          selectedBranch={selectedBranch}
-          onBranchChange={setSelectedBranch}
-          initialBranches={initialBranches}
-          initialContribs={initialContribs}
-        />
+      {/* ── Left: Git sidebar (~18%) — collapsible on tablet ── */}
+      <div className={cn(
+        "shrink-0 flex flex-col overflow-hidden border-r border-white/[0.05] transition-all duration-300 ease-in-out",
+        sidebarCollapsed ? "w-9 pr-0 items-center" : "w-[18%] pr-4"
+      )}>
+        {sidebarCollapsed ? (
+          /* Collapsed strip — single button at the top */
+          <button
+            onClick={() => setSidebarCollapsed(false)}
+            title="Expand sidebar"
+            className="mt-3 mx-auto w-7 h-7 shrink-0 rounded-full border border-white/10 text-white/30 hover:text-white/70 hover:border-white/20 flex items-center justify-center transition duration-150"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <>
+            {/* Collapse button — tablet only */}
+            <div className="xl:hidden flex justify-end mb-1 shrink-0">
+              <button
+                onClick={() => setSidebarCollapsed(true)}
+                title="Collapse sidebar"
+                className="w-7 h-7 rounded-full border border-white/10 text-white/30 hover:text-white/70 hover:border-white/20 flex items-center justify-center transition duration-150"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <GitSidebar
+              project={project}
+              files={files}
+              links={links}
+              selectedBranch={selectedBranch}
+              onBranchChange={setSelectedBranch}
+              initialBranches={initialBranches}
+              initialContribs={initialContribs}
+            />
+          </>
+        )}
       </div>
 
       {/* ── Middle: Commits panel (~35%) ── */}
