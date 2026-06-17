@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { MoreHorizontal, GitBranch, Clock, Trash2, Archive, RotateCcw } from "lucide-react";
+import { DeleteProjectDialog } from "./delete-project-dialog";
 import { ProjectStatusBadge } from "./project-status-badge";
 import {
   DropdownMenu,
@@ -49,9 +51,11 @@ function ProjectAvatar({ name, logoUrl }: { name: string; logoUrl: string | null
 
 export function ProjectCard({ project }: ProjectCardProps) {
   const { updateProject, deleteProject } = useProjects();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const repoShortName = project.githubRepo?.fullName.split("/")[1] ?? null;
 
   return (
+    <>
     <div className="group relative flex flex-col rounded-xl border border-border bg-card hover:border-primary/30 transition-all duration-150">
       {/* Main content */}
       <Link href={`/projects/${project.id}`} className="flex-1 p-5 block">
@@ -100,7 +104,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => deleteProject(project.id)}
+                  onClick={() => setDeleteDialogOpen(true)}
                   className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="h-4 w-4 mr-2" />Delete
@@ -128,5 +132,12 @@ export function ProjectCard({ project }: ProjectCardProps) {
         </span>
       </div>
     </div>
+      <DeleteProjectDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        projectName={project.name}
+        onConfirm={() => deleteProject(project.id)}
+      />
+    </>
   );
 }

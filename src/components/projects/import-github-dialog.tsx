@@ -46,7 +46,7 @@ export function ImportGithubDialog({ open, onOpenChange }: ImportGithubDialogPro
   }, [open]);
 
   function toggle(id: number) {
-    if (linkedIds.has(id)) return; // already imported — not selectable
+    if (linkedIds.has(id)) return;
     setSelected(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
@@ -55,7 +55,7 @@ export function ImportGithubDialog({ open, onOpenChange }: ImportGithubDialogPro
   }
 
   function toggleAll() {
-    const importable = filtered.filter(r => !linkedIds.has(r.id));
+    const importable  = filtered.filter(r => !linkedIds.has(r.id));
     const allSelected = importable.every(r => selected.has(r.id));
     if (allSelected) {
       setSelected(new Set());
@@ -84,8 +84,8 @@ export function ImportGithubDialog({ open, onOpenChange }: ImportGithubDialogPro
     (r.description ?? "").toLowerCase().includes(query.toLowerCase())
   );
 
-  const importable       = filtered.filter(r => !linkedIds.has(r.id));
-  const selectedCount    = [...selected].filter(id => filtered.some(r => r.id === id)).length;
+  const importable          = filtered.filter(r => !linkedIds.has(r.id));
+  const selectedCount       = [...selected].filter(id => filtered.some(r => r.id === id)).length;
   const allFilteredSelected = importable.length > 0 && importable.every(r => selected.has(r.id));
 
   return (
@@ -131,7 +131,7 @@ export function ImportGithubDialog({ open, onOpenChange }: ImportGithubDialogPro
           )}
 
           {!loading && !error && filtered.map(repo => {
-            const alreadyImported = linkedIds.has(repo.id);
+            const alreadyLinked   = linkedIds.has(repo.id);
             const isSelected      = selected.has(repo.id);
             const [org, repoName] = repo.fullName.split("/");
 
@@ -140,11 +140,11 @@ export function ImportGithubDialog({ open, onOpenChange }: ImportGithubDialogPro
                 key={repo.id}
                 type="button"
                 onClick={() => toggle(repo.id)}
-                disabled={alreadyImported}
+                disabled={alreadyLinked}
                 className={cn(
                   "w-full flex items-start gap-3 rounded-2xl px-3 py-3 text-left",
                   "transition duration-150 group",
-                  alreadyImported
+                  alreadyLinked
                     ? "opacity-40 cursor-default"
                     : isSelected
                       ? "bg-primary/10 border border-primary/25"
@@ -154,13 +154,13 @@ export function ImportGithubDialog({ open, onOpenChange }: ImportGithubDialogPro
                 {/* Checkbox */}
                 <div className={cn(
                   "mt-0.5 h-4 w-4 shrink-0 rounded border flex items-center justify-center transition duration-150",
-                  alreadyImported
+                  alreadyLinked
                     ? "border-white/20 bg-white/10"
                     : isSelected
                       ? "border-primary bg-primary/20"
                       : "border-white/20 group-hover:border-white/40"
                 )}>
-                  {alreadyImported
+                  {alreadyLinked
                     ? <CheckCheck className="h-2.5 w-2.5 text-white/40" />
                     : isSelected
                       ? <div className="h-2 w-2 rounded-sm bg-primary" />
@@ -178,7 +178,7 @@ export function ImportGithubDialog({ open, onOpenChange }: ImportGithubDialogPro
                         <Lock className="h-2.5 w-2.5" /> private
                       </span>
                     )}
-                    {alreadyImported && (
+                    {alreadyLinked && (
                       <span className="text-[10px] text-primary/60 border border-primary/20 rounded-full px-1.5 py-0.5">
                         imported
                       </span>

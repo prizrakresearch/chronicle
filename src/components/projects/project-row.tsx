@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PinDialog } from "./pin-dialog";
+import { DeleteProjectDialog } from "./delete-project-dialog";
 import { formatRelativeDate } from "@/lib/utils/format";
 import { useProjects } from "@/lib/store/projects-context";
 import type { Project } from "@/types";
@@ -54,7 +55,8 @@ function ProjectAvatar({ name, logoUrl }: { name: string; logoUrl: string | null
 export function ProjectRow({ project, dimmed = false }: ProjectRowProps) {
   const { updateProject, deleteProject, pin, setPin, isReadOnly } = useProjects();
   const router = useRouter();
-  const [pinSetupOpen, setPinSetupOpen] = useState(false);
+  const [pinSetupOpen,    setPinSetupOpen]    = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const repoShortName = project.githubRepo?.fullName.split("/")[1] ?? null;
   const isPinned   = project.pinned    ?? false;
   const isHidden   = project.hidden    ?? false;
@@ -136,7 +138,7 @@ export function ProjectRow({ project, dimmed = false }: ProjectRowProps) {
 
                 {/* Pin / Unpin */}
                 <DropdownMenuItem
-                  onClick={() => updateProject(project.id, { pinned: !isPinned })}
+                  onClick={(e) => { e.stopPropagation(); updateProject(project.id, { pinned: !isPinned }); }}
                 >
                   {isPinned ? (
                     <><PinOff className="h-3.5 w-3.5 mr-2 opacity-60" />Unpin</>
@@ -146,17 +148,14 @@ export function ProjectRow({ project, dimmed = false }: ProjectRowProps) {
                 </DropdownMenuItem>
 
                 {/* Hide / Unhide */}
-                <DropdownMenuItem onClick={isHidden
-                  ? () => updateProject(project.id, { hidden: false })
-                  : handleHide
-                }>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); isHidden ? updateProject(project.id, { hidden: false }) : handleHide(); }}>
                   <EyeOff className="h-3.5 w-3.5 mr-2 opacity-60" />
                   {isHidden ? "Unhide" : "Hide"}
                 </DropdownMenuItem>
 
                 {/* Public share page toggle */}
                 <DropdownMenuItem
-                  onClick={() => updateProject(project.id, { isShared: !isShared })}
+                  onClick={(e) => { e.stopPropagation(); updateProject(project.id, { isShared: !isShared }); }}
                 >
                   <Share2 className="h-3.5 w-3.5 mr-2 opacity-60" />
                   {isShared ? "Disable public link" : "Enable public link"}
@@ -166,9 +165,7 @@ export function ProjectRow({ project, dimmed = false }: ProjectRowProps) {
 
                 {/* Archive / Restore */}
                 <DropdownMenuItem
-                  onClick={() => updateProject(project.id, {
-                    status: project.status === "archived" ? "active" : "archived",
-                  })}
+                  onClick={(e) => { e.stopPropagation(); updateProject(project.id, { status: project.status === "archived" ? "active" : "archived" }); }}
                 >
                   {project.status === "archived" ? (
                     <><RotateCcw className="h-3.5 w-3.5 mr-2 opacity-60" />Restore</>
@@ -181,7 +178,7 @@ export function ProjectRow({ project, dimmed = false }: ProjectRowProps) {
 
                 {/* Delete */}
                 <DropdownMenuItem
-                  onClick={() => deleteProject(project.id)}
+                  onClick={(e) => { e.stopPropagation(); setDeleteDialogOpen(true); }}
                   className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="h-3.5 w-3.5 mr-2" />Delete
@@ -200,6 +197,12 @@ export function ProjectRow({ project, dimmed = false }: ProjectRowProps) {
         onOpenChange={setPinSetupOpen}
         onUnlock={() => {}}
         onSetPin={handlePinSetup}
+      />
+      <DeleteProjectDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        projectName={project.name}
+        onConfirm={() => deleteProject(project.id)}
       />
     </>
   );
