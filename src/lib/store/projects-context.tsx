@@ -36,7 +36,6 @@ import {
   requestUploadUrl,
   saveProjectFile,
   saveAsNewVersion         as dbSaveAsNewVersion,
-  getFileUrl,
   getProjectFilesWithUrls,
   deleteProjectFile        as dbDeleteProjectFile,
 } from "@/lib/db/files";
@@ -575,15 +574,16 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
     const filename = options?.overrideName ?? file.name;
     const mimeType = file.type || "application/octet-stream";
 
-    // 1 — Presigned PUT URL
-    const { uploadUrl, s3Key } = await requestUploadUrl({
+    // 1 — Presigned PUT URL + pre-signed download URL (generated together before insert)
+    const { uploadUrl, downloadUrl, s3Key } = await requestUploadUrl({
       project_id: projectId,
       filename,
       mime_type:  mimeType,
     });
 
-    // 2 — Upload bytes straight to S3 via XHR (supports progress events)
-    await new Promise<void>((resolve, reject) => {
+    // 2 — Upload bytes to S3 via XHR (supports progress); retry once on stale
+    //     keep-alive connection reset (browser opens a fresh TCP connection on retry)
+    const xhrPut = () => new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100));
@@ -598,9 +598,18 @@ export function ProjectsProvider({ children }: { children: React.ReactNode }) {
       xhr.setRequestHeader("Content-Type", mimeType);
       xhr.send(file);
     });
-
-    // 4 — Get a short-lived download URL so the file is immediately viewable
-    const downloadUrl = await getFileUrl(s3Key);
+    try {
+      await xhrPut();
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("Network error")) {
+        // S3 reset the HTTP/2 stream — wait for Chrome to cycle to a new connection
+        onProgress?.(0);
+        await new Promise(r => setTimeout(r, 2000));
+        await xhrPut();
+      } else {
+        throw err;
+      }
+    }
 
     if (options?.versionOf) {
       // 3a — Archive old version, update existing file record

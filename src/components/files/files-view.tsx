@@ -248,7 +248,16 @@ function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onD
         <div className="w-8 h-8 rounded-xl bg-white/[0.06] flex items-center justify-center shrink-0 overflow-hidden">
           {item.kind === "file" && item.file.mimeType.startsWith("image/") ? (
             <img src={item.file.dataUrl} alt={item.file.name} loading="lazy"
-              className="w-full h-full object-cover" />
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                const img = e.currentTarget;
+                const retries = parseInt(img.dataset.retries ?? "0");
+                if (retries < 2) {
+                  img.dataset.retries = String(retries + 1);
+                  const src = img.src;
+                  setTimeout(() => { img.src = ""; img.src = src; }, 2000);
+                }
+              }} />
           ) : item.kind === "file" && isDocPreviewType(item.file.mimeType) ? (
             <DocThumbnail
               fileId={item.file.id}
@@ -292,7 +301,7 @@ function ItemRow({ item, meta, folders, allTags, onMetaChange, onDeleteLink, onD
                 className="h-7 w-7 rounded-full border border-white/10 text-white/30 hover:text-white/70 hover:border-white/20 flex items-center justify-center transition duration-150">
                 <ExternalLink className="h-3 w-3" />
               </button>
-              <button onClick={() => { const a = document.createElement("a"); a.href = item.file.dataUrl; a.download = item.file.name; document.body.appendChild(a); a.click(); document.body.removeChild(a); }}
+              <button onClick={() => { const a = document.createElement("a"); a.href = item.file.s3Key ? `/api/files/download?key=${encodeURIComponent(item.file.s3Key)}&name=${encodeURIComponent(item.file.name)}` : item.file.dataUrl; a.download = item.file.name; document.body.appendChild(a); a.click(); document.body.removeChild(a); }}
                 className="h-7 w-7 rounded-full border border-white/10 text-white/30 hover:text-white/70 hover:border-white/20 flex items-center justify-center transition duration-150 ml-0.5">
                 <Download className="h-3 w-3" />
               </button>
@@ -363,7 +372,16 @@ function ItemCard({ item, meta, onDeleteLink, onDeleteFile, isReadOnly, onPrevie
             />
           ) : (
             <img src={item.file.dataUrl} alt={item.file.name} loading="lazy"
-              className="w-full h-full object-cover" />
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                const img = e.currentTarget;
+                const retries = parseInt(img.dataset.retries ?? "0");
+                if (retries < 2) {
+                  img.dataset.retries = String(retries + 1);
+                  const src = img.src;
+                  setTimeout(() => { img.src = ""; img.src = src; }, 2000);
+                }
+              }} />
           )}
         </div>
       ) : (

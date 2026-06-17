@@ -200,8 +200,11 @@ export async function requestUploadUrl(input: {
 }) {
   const userId = await requireOwner();
   const key = buildFileKey(userId, input.project_id, input.filename);
-  const url = await getUploadUrl(key, input.mime_type);
-  return { uploadUrl: url, s3Key: key };
+  const [uploadUrl, downloadUrl] = await Promise.all([
+    getUploadUrl(key, input.mime_type),
+    getDownloadUrl(key),
+  ]);
+  return { uploadUrl, downloadUrl, s3Key: key };
 }
 
 /**

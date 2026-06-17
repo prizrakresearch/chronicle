@@ -9,8 +9,9 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-const region = process.env.AWS_REGION!;
-const bucket = process.env.AWS_S3_BUCKET!;
+const region          = process.env.AWS_REGION!;
+const bucket          = process.env.AWS_S3_BUCKET!;
+const cloudFrontDomain = process.env.CLOUDFRONT_DOMAIN ?? null;
 
 if (!region || !bucket) {
   throw new Error("Missing AWS env vars: AWS_REGION and AWS_S3_BUCKET required");
@@ -22,6 +23,11 @@ export const s3 = new S3Client({
     accessKeyId:     process.env.AWS_ACCESS_KEY_ID!,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
   },
+  // Presigned URLs are consumed by the browser, which can't negotiate
+  // checksums at signing time. Disable both directions so S3 doesn't embed
+  // placeholder CRC32 in PUT URLs or checksum-mode headers in GET URLs.
+  requestChecksumCalculation:  "WHEN_REQUIRED",
+  responseChecksumValidation:  "WHEN_REQUIRED",
 });
 
 // ── S3 Key Schema ────────────────────────────────────────────────────────────
@@ -90,13 +96,17 @@ export async function getUploadUrl(
 }
 
 /**
- * Generate a presigned GET URL for downloading / previewing a file.
- * Expires in 1 hour by default.
+ * Generate a URL for downloading / previewing a file.
+ * When CLOUDFRONT_DOMAIN is set, returns a permanent CDN URL.
+ * Otherwise falls back to a presigned S3 GET URL (expires in 1 hour by default).
  */
 export async function getDownloadUrl(
   key: string,
   expiresIn = 3600
 ): Promise<string> {
+  if (cloudFrontDomain) {
+    return `https://${cloudFrontDomain}/${key}`;
+  }
   const cmd = new GetObjectCommand({ Bucket: bucket, Key: key });
   return getSignedUrl(s3, cmd, { expiresIn });
 }
