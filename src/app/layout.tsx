@@ -179,7 +179,7 @@ export default function RootLayout({
                 </main>
                 {/* fade — gradient overlay, no blur */}
                 <div
-                  className="fixed bottom-0 left-0 right-0 h-24 pointer-events-none z-10"
+                  className="fixed bottom-0 left-0 right-0 h-24 pointer-events-none z-10 hidden xl:block"
                   style={{ background: "linear-gradient(to top, rgb(9,9,11) 0%, transparent 100%)" }}
                 />
                 {/* bottom bar — fixed on top */}
