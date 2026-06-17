@@ -58,7 +58,7 @@ export function RoadmapBoard({ projectId }: RoadmapBoardProps) {
   }, [draggedId, allItems, updateRoadmapItem]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full overflow-hidden">
       {COLUMNS.map((status) => {
         const items = allItems
           .filter(item => item.status === status)

@@ -10,9 +10,10 @@ interface AddRoadmapItemFormProps {
   projectId: string;
   status: RoadmapStatus;
   sortOrderBase: number;
+  compact?: boolean;
 }
 
-export function AddRoadmapItemForm({ projectId, status, sortOrderBase }: AddRoadmapItemFormProps) {
+export function AddRoadmapItemForm({ projectId, status, sortOrderBase, compact }: AddRoadmapItemFormProps) {
   const { addRoadmapItem, isReadOnly } = useProjects();
   const [active, setActive] = useState(false);
   const [value, setValue] = useState("");
@@ -49,6 +50,16 @@ export function AddRoadmapItemForm({ projectId, status, sortOrderBase }: AddRoad
   if (isReadOnly) return null;
 
   if (!active) {
+    if (compact) {
+      return (
+        <button
+          onClick={activate}
+          className="w-6 h-6 rounded-full border border-white/10 text-white/30 hover:text-white/60 hover:border-white/20 flex items-center justify-center transition duration-150"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      );
+    }
     return (
       <button
         onClick={activate}

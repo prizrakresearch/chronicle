@@ -79,23 +79,27 @@ export function RoadmapColumn({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       className={cn(
-        "rounded-xl border transition-all duration-150 p-4 flex flex-col min-h-32",
+        "rounded-xl border transition-all duration-150 p-4 flex flex-col xl:min-h-32 min-h-0 overflow-hidden",
         isOver
           ? COLUMN_OVER[status]
           : "border-zinc-800/80 bg-zinc-900/40"
       )}
     >
       {/* Column header */}
-      <div className="flex items-center gap-2 mb-3 px-1">
-        <div className={cn("w-2 h-2 rounded-full", COLUMN_DOT[status])} />
+      <div className="flex items-center gap-2 mb-3 px-1 shrink-0">
+        <div className={cn("w-2 h-2 rounded-full shrink-0", COLUMN_DOT[status])} />
         <span className={cn("text-xs font-semibold uppercase tracking-wider", COLUMN_COLORS[status])}>
           {ROADMAP_STATUS_LABELS[status]}
         </span>
         <span className="text-xs text-zinc-600 ml-auto">{items.length}</span>
+        {/* Tablet: + button in header */}
+        <div className="xl:hidden">
+          <AddRoadmapItemForm projectId={projectId} status={status} sortOrderBase={sortOrderBase} compact />
+        </div>
       </div>
 
       {/* Items */}
-      <div className="flex-1 space-y-0.5 min-h-[32px]">
+      <div className="flex-1 space-y-0.5 min-h-0 overflow-y-auto">
         {items.map((item) => (
           <RoadmapItem
             key={item.id}
@@ -121,8 +125,8 @@ export function RoadmapColumn({
         )}
       </div>
 
-      {/* Add item */}
-      <div className="mt-2">
+      {/* Add item — desktop only */}
+      <div className="hidden xl:block mt-2 shrink-0">
         <AddRoadmapItemForm
           projectId={projectId}
           status={status}

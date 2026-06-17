@@ -1498,13 +1498,13 @@ export function FilesView({ projectId, project, initialBranches, initialContribs
         sidebarCollapsed ? "w-9 pr-0 items-center" : "w-[18%] pr-4"
       )}>
         {sidebarCollapsed ? (
-          /* Collapsed strip — single button at the top */
+          /* Collapsed strip — entire strip is the tap target */
           <button
             onClick={() => setSidebarCollapsed(false)}
             title="Expand sidebar"
-            className="mt-3 mx-auto w-7 h-7 shrink-0 rounded-full border border-white/10 text-white/30 hover:text-white/70 hover:border-white/20 flex items-center justify-center transition duration-150"
+            className="flex-1 w-full flex items-start justify-center pt-4 hover:bg-white/[0.03] transition duration-150"
           >
-            <ChevronRight className="h-3.5 w-3.5" />
+            <ChevronRight className="h-4 w-4 text-white/40" />
           </button>
         ) : (
           <>
