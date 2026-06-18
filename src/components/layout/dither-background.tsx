@@ -196,26 +196,28 @@ export function DitherBackground({
       psize:  gl.getUniformLocation(prog, "u_pixelSize"),
     };
 
-    // Responsive canvas size — guard prevents re-fires if dimensions haven't
-    // actually changed (iOS Safari can fire ResizeObserver in a tight loop when
-    // a WebGL canvas size is updated while its layout box extends above y=0).
+    // Responsive canvas size.
+    // doResize() is called synchronously on mount so the WebGL backing buffer
+    // is correct before the first rAF frame. ResizeObserver calls are debounced
+    // + guarded to break the iOS Safari loop that fires when a WebGL canvas that
+    // extends above y=0 has its dimensions updated.
     let prevW = -1, prevH = -1;
     let resizeTid: ReturnType<typeof setTimeout> | null = null;
+    const doResize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const newW = Math.floor(canvas.offsetWidth  * dpr);
+      const newH = Math.floor(canvas.offsetHeight * dpr);
+      if (newW === prevW && newH === prevH) return;
+      prevW = newW; prevH = newH;
+      canvas.width  = newW;
+      canvas.height = newH;
+      gl.viewport(0, 0, newW, newH);
+    };
+    doResize(); // synchronous — canvas is ready before first frame
     const resize = () => {
       if (resizeTid) return;
-      resizeTid = setTimeout(() => {
-        resizeTid = null;
-        const dpr = window.devicePixelRatio || 1;
-        const newW = Math.floor(canvas.offsetWidth  * dpr);
-        const newH = Math.floor(canvas.offsetHeight * dpr);
-        if (newW === prevW && newH === prevH) return;
-        prevW = newW; prevH = newH;
-        canvas.width  = newW;
-        canvas.height = newH;
-        gl.viewport(0, 0, newW, newH);
-      }, 50);
+      resizeTid = setTimeout(() => { resizeTid = null; doResize(); }, 50);
     };
-    resize();
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
 
