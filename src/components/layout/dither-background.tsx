@@ -196,12 +196,24 @@ export function DitherBackground({
       psize:  gl.getUniformLocation(prog, "u_pixelSize"),
     };
 
-    // Responsive canvas size
+    // Responsive canvas size — guard prevents re-fires if dimensions haven't
+    // actually changed (iOS Safari can fire ResizeObserver in a tight loop when
+    // a WebGL canvas size is updated while its layout box extends above y=0).
+    let prevW = -1, prevH = -1;
+    let resizeTid: ReturnType<typeof setTimeout> | null = null;
     const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width  = Math.floor(canvas.offsetWidth  * dpr);
-      canvas.height = Math.floor(canvas.offsetHeight * dpr);
-      gl.viewport(0, 0, canvas.width, canvas.height);
+      if (resizeTid) return;
+      resizeTid = setTimeout(() => {
+        resizeTid = null;
+        const dpr = window.devicePixelRatio || 1;
+        const newW = Math.floor(canvas.offsetWidth  * dpr);
+        const newH = Math.floor(canvas.offsetHeight * dpr);
+        if (newW === prevW && newH === prevH) return;
+        prevW = newW; prevH = newH;
+        canvas.width  = newW;
+        canvas.height = newH;
+        gl.viewport(0, 0, newW, newH);
+      }, 50);
     };
     resize();
     const ro = new ResizeObserver(resize);
@@ -271,6 +283,7 @@ export function DitherBackground({
     return () => {
       cancelAnimationFrame(raf);
       if (touchEndTimer) clearTimeout(touchEndTimer);
+      if (resizeTid) clearTimeout(resizeTid);
       ro.disconnect();
       window.removeEventListener("mousemove",   onMove);
       window.removeEventListener("touchstart",  onTouchStart);
@@ -284,8 +297,13 @@ export function DitherBackground({
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 w-full h-full"
-      style={{ zIndex: elevated ? 9997 : -10, backgroundColor: "black", willChange: "transform" }}
+      className="fixed left-0 right-0 bottom-0"
+      style={{
+        top: "calc(-1 * env(safe-area-inset-top, 0px))",
+        zIndex: elevated ? 9997 : -10,
+        backgroundColor: "black",
+        willChange: "transform",
+      }}
     />
   );
 }
