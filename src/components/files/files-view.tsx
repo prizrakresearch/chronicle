@@ -1398,6 +1398,7 @@ export function FilesView({ projectId, project, initialBranches, initialContribs
   const [showTrash,          setShowTrash]          = useState(false);
   const [showActivity,       setShowActivity]       = useState(false);
   const [sidebarCollapsed,   setSidebarCollapsed]   = useState(false);
+  const [mobileTab,          setMobileTab]          = useState<"files" | "commits" | "git">("files");
 
   // Default to collapsed on tablet (< 1280px)
   useEffect(() => {
@@ -1490,7 +1491,72 @@ export function FilesView({ projectId, project, initialBranches, initialContribs
   }
 
   return (
-    <div className="h-full flex gap-0 min-h-0">
+    <>
+      {/* ── Mobile: tabbed single-column view ── */}
+      <div className="md:hidden h-full flex flex-col">
+        {/* Tab bar */}
+        <div className="shrink-0 flex items-center gap-1.5 px-4 pb-3 pt-1">
+          {([
+            { id: "files",   label: "Files",   Icon: File },
+            { id: "commits", label: "Commits", Icon: GitBranch },
+            { id: "git",     label: "Git",     Icon: Code2 },
+          ] as const).map(({ id, label, Icon }) => (
+            <button key={id} onClick={() => setMobileTab(id)}
+              className={cn(
+                "flex-1 h-9 rounded-full text-xs font-medium border flex items-center justify-center gap-1.5 transition duration-200",
+                mobileTab === id
+                  ? "bg-primary/10 border-primary/40 text-primary/80"
+                  : "border-white/10 text-white/30 hover:text-white/60 hover:border-white/20"
+              )}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Active panel */}
+        <div className="flex-1 min-h-0 overflow-hidden px-4">
+          {mobileTab === "files" && (
+            <RightFilesPanel
+              projectId={projectId}
+              folders={folders}
+              itemMeta={itemMeta}
+              onCreateFolder={createFolder}
+              onRenameFolder={renameFolder}
+              onDeleteFolder={deleteFolder}
+              onMetaChange={updateMeta}
+              showCredentials={showCredentials}
+              onToggleCredentials={() => setShowCredentials(true)}
+              onToggleTrash={() => setShowTrash(true)}
+              onToggleActivity={() => setShowActivity(true)}
+            />
+          )}
+          {mobileTab === "commits" && (
+            <CommitsPanel
+              project={project}
+              selectedBranch={selectedBranch}
+              isFullscreen={false}
+              onFullscreen={() => {}}
+              initialCommits={initialCommits}
+            />
+          )}
+          {mobileTab === "git" && (
+            <GitSidebar
+              project={project}
+              files={files}
+              links={links}
+              selectedBranch={selectedBranch}
+              onBranchChange={setSelectedBranch}
+              initialBranches={initialBranches}
+              initialContribs={initialContribs}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* ── Tablet / Desktop: 3-column layout (untouched) ── */}
+      <div className="hidden md:flex h-full gap-0 min-h-0">
 
       {/* ── Left: Git sidebar (~18%) — collapsible on tablet ── */}
       <div className={cn(
@@ -1613,6 +1679,7 @@ export function FilesView({ projectId, project, initialBranches, initialContribs
         )}
       </div>
 
-    </div>
+      </div>
+    </>
   );
 }

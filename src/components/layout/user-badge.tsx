@@ -41,7 +41,7 @@ const DOT_CLASS: Record<RoleVariant, string> = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function UserBadge() {
+export function UserBadge({ triggerClassName }: { triggerClassName?: string } = {}) {
   const { user, isLoaded } = useUser();
   const { signOut, openUserProfile } = useClerk();
   const { hasGithubToken, isReadOnly } = useProjects();
@@ -68,7 +68,8 @@ export function UserBadge() {
         className={cn(
           "flex items-center gap-2 h-11 pl-1.5 pr-3 rounded-full border border-white/10",
           "hover:border-white/20 hover:bg-white/[0.03] bg-transparent",
-          "transition duration-200 ease-in-out cursor-pointer"
+          "transition duration-200 ease-in-out cursor-pointer",
+          triggerClassName
         )}
       >
         <Avatar>

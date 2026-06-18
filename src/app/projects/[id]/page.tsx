@@ -346,20 +346,20 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     <div className="h-full flex flex-col">
 
       {/* ── Topbar ── */}
-      <div className="shrink-0 py-5 px-6 flex items-center z-20 relative">
+      <div className="shrink-0 pb-5 px-4 md:py-5 md:px-6 flex items-center z-20 relative" style={{ paddingTop: "max(1.25rem, env(safe-area-inset-top))" }}>
 
         {/* Left: Back button + project identity */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <Link
             href="/"
-            className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 gap-2 transition duration-200 ease-in-out shrink-0 flex items-center"
+            className="h-11 px-0 md:px-5 w-11 md:w-auto text-sm font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 gap-2 transition duration-200 ease-in-out shrink-0 flex items-center justify-center"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back
+            <span className="hidden md:inline">Back</span>
           </Link>
 
-          {/* Project identity pill */}
-          <div className="flex items-center gap-3 pl-1 pr-5 h-11 rounded-full border border-white/10 bg-transparent shrink-0">
+          {/* Project identity pill — hidden on mobile */}
+          <div className="hidden md:flex items-center gap-3 pl-1 pr-5 h-11 rounded-full border border-white/10 bg-transparent shrink-0">
             <TopbarAvatar
               name={project.name}
               logoUrl={project.logoUrl}
@@ -400,9 +400,10 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           </div>
         </div>
 
-        {/* Centre: Chronicle wordmark */}
-        <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none">
-          <span className="text-sm font-semibold text-white/80">Chronicle</span>
+        {/* Centre: Chronicle (tablet/desktop) · project name (mobile) */}
+        <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none max-w-[40vw] overflow-hidden text-center">
+          <span className="hidden md:block text-sm font-semibold text-white/80">Chronicle</span>
+          <span className="md:hidden text-sm font-semibold text-white truncate block">{project.name}</span>
         </div>
 
         {/* Right: New project (owner) + UserBadge */}
@@ -411,21 +412,47 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             <Button
               onClick={() => setCreateOpen(true)}
               size="sm"
-              className="h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 gap-2 transition duration-200 ease-in-out"
+              className="hidden md:inline-flex h-11 px-5 text-sm font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 gap-2 transition duration-200 ease-in-out"
             >
               <Plus className="h-3.5 w-3.5" />
               New project
             </Button>
           )}
-          <UserBadge />
+          <div className="hidden md:block"><UserBadge /></div>
         </div>
       </div>
 
       {/* ── Tab pills + status + action buttons ── */}
-      <div className="shrink-0 px-6 pb-4 flex items-center">
+      <div className="shrink-0 px-4 pb-3 md:px-6 md:pb-4 pb-6 flex items-center">
 
-        {/* Left: Tab pills */}
-        <div className="flex items-center gap-1.5 flex-1">
+        {/* Mobile: 2×2 pill grid */}
+        <div className="md:hidden grid grid-cols-2 gap-2 flex-1">
+          {TABS.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => setActiveTab(tab.value)}
+              className={cn(
+                "group h-11 pl-1 pr-4 rounded-full text-sm font-medium border flex items-center gap-2.5 transition duration-200 ease-in-out w-full",
+                activeTab === tab.value
+                  ? "text-primary/75 border-transparent"
+                  : "text-white/50 border-white/10 hover:border-transparent hover:text-primary/75"
+              )}
+            >
+              <span className={cn(
+                "w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition duration-200 ease-in-out group-hover:scale-110",
+                activeTab === tab.value ? "bg-primary/75" : "bg-zinc-800 group-hover:bg-primary/75"
+              )}>
+                <span className={cn("transition duration-200 ease-in-out group-hover:text-black", activeTab === tab.value && "text-black")}>
+                  {tab.icon}
+                </span>
+              </span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tablet/desktop: scrollable pill row (untouched) */}
+        <div className="hidden md:flex items-center gap-1.5 flex-1 min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
           {TABS.map((tab) => (
             <button
               key={tab.value}
@@ -450,7 +477,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           ))}
         </div>
 
-        {/* Centre: Status — editable for owner, static badge for guests */}
+        {/* Centre: Status — hidden on mobile, editable for owner, static badge for guests */}
+        <div className="hidden md:contents">
         {isReadOnly ? (
           <span className={cn(
             "h-11 px-5 text-sm font-semibold capitalize flex items-center rounded-full border border-white/10",
@@ -486,9 +514,10 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             </SelectContent>
           </Select>
         )}
+        </div>
 
-        {/* Right: Action buttons */}
-        <div className="flex items-center gap-2 flex-1 justify-end">
+        {/* Right: Action buttons — hidden on mobile */}
+        <div className="hidden md:flex items-center gap-2 flex-1 justify-end">
 
           {/* Copy repo link */}
           <button
@@ -573,7 +602,14 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       </div>
 
       {/* ── Tab content ── */}
-      <div className={cn("flex-1 px-6 py-2 min-h-0", activeTab === "notes" || activeTab === "overview" || activeTab === "files" ? "overflow-hidden" : "overflow-y-auto")}>
+      <div className={cn(
+        "flex-1 px-4 md:px-6 py-2 min-h-0",
+        activeTab === "notes" || activeTab === "files"
+          ? "overflow-hidden"
+          : activeTab === "overview"
+          ? "overflow-y-auto md:overflow-hidden"
+          : "overflow-y-auto"
+      )}>
         {activeTab === "overview"  && <OverviewPanel project={project} onOpenNotes={() => setActiveTab("notes")} />}
         {activeTab === "roadmap"   && <RoadmapBoard  projectId={project.id} />}
         {activeTab === "files"     && <FilesView     projectId={project.id} project={project} />}

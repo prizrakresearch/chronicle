@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import ReactMarkdown from "react-markdown";
-import { Plus, FileText, Trash2, Upload, Download, Share2, X, Check } from "lucide-react";
+import { Plus, FileText, Trash2, Upload, Download, Share2, X, Check, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProjects } from "@/lib/store/projects-context";
 import type { MarkdownNote, Project } from "@/types";
@@ -228,6 +228,10 @@ export function NotesView({ project }: NotesViewProps) {
   const [dirty, setDirty]               = useState(false);
   const [importing, setImporting]       = useState(false);
   const [openMenuId, setOpenMenuId]     = useState<string | null>(null);
+  const [mobileView, setMobileView]     = useState<"list" | "detail">("list");
+  const [mobileMode, setMobileMode]     = useState<"edit" | "preview">("edit");
+  const [isAutoPreview, setIsAutoPreview] = useState(false);
+  const [lastTypedAt, setLastTypedAt]   = useState(0);
 
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
   const previewRef   = useRef<HTMLDivElement>(null);
@@ -270,6 +274,16 @@ export function NotesView({ project }: NotesViewProps) {
     const t = setTimeout(save, 800);
     return () => clearTimeout(t);
   }, [dirty, save]);
+
+  // ── Mobile: auto-switch to preview after 5s inactivity while in edit mode ────
+  useEffect(() => {
+    if (mobileMode !== "edit" || mobileView !== "detail") return;
+    const t = setTimeout(() => {
+      setMobileMode("preview");
+      setIsAutoPreview(true);
+    }, 5000);
+    return () => clearTimeout(t);
+  }, [lastTypedAt, mobileMode, mobileView]);
 
   // ── Card click: plain / Cmd / Shift ──────────────────────────────────────────
 
@@ -321,6 +335,7 @@ export function NotesView({ project }: NotesViewProps) {
     setActiveNoteId(note.id);
     setSelectedIds(new Set());
     setOpenMenuId(null);
+    setMobileView("detail");
   };
 
   const deleteNote = (id: string) => {
@@ -417,10 +432,147 @@ export function NotesView({ project }: NotesViewProps) {
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="h-full flex overflow-hidden gap-4">
+    <div className="h-full flex overflow-hidden gap-4 md:gap-4">
+
+      {/* ══ MOBILE layout ══ */}
+      <div className="md:hidden flex-1 flex flex-col min-w-0 overflow-hidden">
+
+        {/* Mobile list view */}
+        {mobileView === "list" && (
+          <div className="h-full flex flex-col gap-3 overflow-hidden">
+            {!isReadOnly && (
+              <button
+                onClick={createNote}
+                className="shrink-0 h-11 px-4 text-sm font-semibold rounded-full bg-transparent text-primary/75 border border-primary/75 hover:bg-primary/10 flex items-center justify-center gap-2 transition duration-200 ease-in-out"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New note
+              </button>
+            )}
+            <div className="flex-1 overflow-y-auto min-h-0 space-y-2 pb-8">
+              {notes.length === 0 ? (
+                <p className="text-[11px] text-white/20 text-center py-12">No notes yet</p>
+              ) : (
+                notes.map((note) => (
+                  <div
+                    key={note.id}
+                    onClick={() => { setActiveNoteId(note.id); setMobileView("detail"); }}
+                    className="w-full text-left px-4 pt-3 pb-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] active:bg-white/[0.06] cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="h-3.5 w-3.5 shrink-0 text-white/25" />
+                      <span className="text-sm font-semibold text-white/75 truncate">
+                        {note.title || "Untitled"}
+                      </span>
+                    </div>
+                    {note.content && (
+                      <p className="mt-1 ml-[22px] text-xs text-white/30 line-clamp-2 leading-relaxed">
+                        {notePreview(note.content)}
+                      </p>
+                    )}
+                    <p className="mt-1.5 ml-[22px] text-[10px] text-white/15">
+                      {formatDate(note.updatedAt)}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Mobile detail view */}
+        {mobileView === "detail" && activeNote && (
+          <div className="h-full flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="shrink-0 flex items-center gap-2 pb-3 border-b border-white/[0.06]">
+              <button
+                onClick={() => { if (dirty) save(); setMobileView("list"); }}
+                className="h-9 w-9 flex items-center justify-center rounded-full text-white/40 hover:text-white/70 transition duration-150"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <input
+                value={titleDraft}
+                readOnly={isReadOnly}
+                onChange={!isReadOnly ? (e) => { setTitleDraft(e.target.value); setDirty(true); } : undefined}
+                className="flex-1 bg-transparent text-sm font-semibold text-white/80 placeholder:text-white/20 focus:outline-none"
+                placeholder="Note title"
+              />
+              {dirty && <span className="text-[10px] text-white/25 shrink-0">Saving…</span>}
+              {!isReadOnly && (
+                <button
+                  onClick={() => { deleteNote(activeNote.id); setMobileView("list"); }}
+                  className="h-9 w-9 flex items-center justify-center rounded-full text-white/20 hover:text-red-400/70 transition duration-150"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Edit / Preview toggle + content */}
+            <div className="flex-1 flex flex-col overflow-hidden pt-3">
+              {/* Toggle button */}
+              <div className="shrink-0 flex mb-3">
+                <button
+                  onClick={() => setMobileMode(m => m === "edit" ? "preview" : "edit")}
+                  className={cn(
+                    "h-8 px-4 text-xs font-semibold rounded-full border transition duration-200 ease-in-out",
+                    mobileMode === "preview"
+                      ? "border-primary/30 text-primary/75 bg-primary/[0.06]"
+                      : "border-white/10 text-white/40"
+                  )}
+                >
+                  {mobileMode === "edit" ? "Preview" : "Edit"}
+                </button>
+              </div>
+
+              {/* Editor */}
+              {mobileMode === "edit" && (
+                <textarea
+                  ref={textareaRef}
+                  value={contentDraft}
+                  readOnly={isReadOnly}
+                  onChange={!isReadOnly ? (e) => { setContentDraft(e.target.value); setDirty(true); setLastTypedAt(Date.now()); } : undefined}
+                  placeholder={"Start writing…\n\n# Heading\n**bold**  *italic*  `code`"}
+                  className="flex-1 resize-none bg-transparent text-sm text-white/60 leading-relaxed placeholder:text-white/15 focus:outline-none font-mono pb-8"
+                />
+              )}
+
+              {/* Preview */}
+              {mobileMode === "preview" && (
+                <div
+                  onClick={isAutoPreview ? () => { setMobileMode("edit"); setIsAutoPreview(false); setLastTypedAt(Date.now()); } : undefined}
+                  className={cn(
+                    "flex-1 overflow-y-auto pb-8",
+                    "first:[&_h1]:mt-0 [&_h1]:text-white/90 [&_h1]:font-bold [&_h1]:text-xl [&_h1]:mb-3 [&_h1]:mt-6",
+                    "[&_h2]:text-white/80 [&_h2]:font-semibold [&_h2]:text-base [&_h2]:mb-2 [&_h2]:mt-5",
+                    "[&_h3]:text-white/70 [&_h3]:font-semibold [&_h3]:text-sm [&_h3]:mb-2 [&_h3]:mt-4",
+                    "[&_p]:text-white/60 [&_p]:leading-relaxed [&_p]:mb-3 [&_p]:text-sm",
+                    "[&_ul]:text-white/60 [&_ul]:text-sm [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-3 [&_ul]:space-y-1",
+                    "[&_ol]:text-white/60 [&_ol]:text-sm [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-3 [&_ol]:space-y-1",
+                    "[&_li]:leading-relaxed [&_strong]:text-white/80 [&_strong]:font-semibold [&_em]:text-white/60 [&_em]:italic",
+                    "[&_code]:text-primary/80 [&_code]:bg-primary/8 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono",
+                    "[&_pre]:bg-zinc-900 [&_pre]:border [&_pre]:border-white/8 [&_pre]:rounded-xl [&_pre]:p-4 [&_pre]:mb-4 [&_pre]:overflow-x-auto",
+                    "[&_blockquote]:border-l-2 [&_blockquote]:border-primary/40 [&_blockquote]:pl-4 [&_blockquote]:text-white/40 [&_blockquote]:italic [&_blockquote]:mb-3",
+                    "[&_hr]:border-white/10 [&_hr]:mb-4 [&_a]:text-primary/75 [&_a]:underline [&_a]:underline-offset-2",
+                    isAutoPreview && "cursor-text"
+                  )}
+                >
+                  {contentDraft
+                    ? <ReactMarkdown>{contentDraft}</ReactMarkdown>
+                    : <span className="text-white/15 text-sm">Nothing to preview yet.</span>
+                  }
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ══ TABLET / DESKTOP layout (untouched) ══ */}
 
       {/* ── Left: sidebar ── */}
-      <div className="w-[260px] shrink-0 flex flex-col gap-2 pt-px">
+      <div className="hidden md:flex w-[260px] shrink-0 flex-col gap-2 pt-px">
 
         {/* New / Import — hidden for guests */}
         {!isReadOnly && (
@@ -619,7 +771,7 @@ export function NotesView({ project }: NotesViewProps) {
       </div>
 
       {/* ── Right: editor / preview ── */}
-      <div className="flex-1 flex flex-col min-w-0 rounded-[28px] border border-border/50 bg-black/50 overflow-hidden">
+      <div className="hidden md:flex flex-1 flex-col min-w-0 rounded-[28px] border border-border/50 bg-black/50 overflow-hidden">
         {activeNote ? (
           <>
             <div className="shrink-0 flex items-center gap-3 px-6 py-3 border-b border-white/[0.06]">

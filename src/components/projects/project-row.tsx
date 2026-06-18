@@ -78,9 +78,51 @@ export function ProjectRow({ project, dimmed = false }: ProjectRowProps) {
 
   return (
     <>
+      {/* ── Mobile card layout ─────────────────────────────────────────────── */}
       <div
         className={cn(
-          "group flex items-center gap-4 pl-2 pr-4 py-2 rounded-full border border-border/50 bg-black/5 hover:bg-white/[0.04] hover:border-border/80 transition-colors duration-200 ease-out cursor-pointer",
+          "md:hidden group flex items-center gap-3 p-3 rounded-2xl border border-border/50 bg-black/5 hover:bg-white/[0.04] hover:border-border/80 transition-colors duration-200 ease-out cursor-pointer",
+          dimmed && "opacity-50 hover:opacity-80"
+        )}
+        onClick={() => router.push(`/projects/${project.id}`)}
+      >
+        <ProjectAvatar name={project.name} logoUrl={project.logoUrl} />
+
+        <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="font-bold text-lg text-white/90 group-hover:text-primary/90 transition-colors duration-150 truncate">
+              {project.name}
+            </span>
+            {isPinned && <Pin className="h-3 w-3 text-primary/50 shrink-0 rotate-45" />}
+            {isHidden && <EyeOff className="h-3 w-3 text-white/25 shrink-0" />}
+          </div>
+          {(project.brief ?? project.description) && (
+            <p className="text-[12px] text-white/40 truncate leading-snug">
+              {project.brief ?? project.description}
+            </p>
+          )}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <ProjectStatusBadge status={project.status} size="sm" />
+            <span className="flex items-center gap-1 text-[11px] text-white/30">
+              <GitBranch className="h-3 w-3" />
+              {project.githubRepo?.defaultBranch ?? "no branch"}
+            </span>
+            <span className="flex items-center gap-1 text-[11px] text-white/30">
+              <Clock className="h-3 w-3" />
+              {formatRelativeDate(project.updatedAt)}
+            </span>
+            <span className="flex items-center gap-1 text-[11px] text-white/30">
+              <CircleDot className="h-3 w-3" />
+              {project._count.roadmapItems} open
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Tablet / desktop row layout (untouched) ──────────────────────── */}
+      <div
+        className={cn(
+          "hidden md:flex group items-center gap-4 pl-2 pr-4 py-2 rounded-full border border-border/50 bg-black/5 hover:bg-white/[0.04] hover:border-border/80 transition-colors duration-200 ease-out cursor-pointer",
           dimmed && "opacity-50 hover:opacity-80"
         )}
         onClick={() => router.push(`/projects/${project.id}`)}

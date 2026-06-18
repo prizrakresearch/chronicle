@@ -239,10 +239,10 @@ export function OverviewPanel({ project, onOpenNotes }: OverviewPanelProps) {
   const { updateProject, isReadOnly } = useProjects();
 
   return (
-    <div className="h-full flex gap-6 overflow-hidden">
+    <div className="flex flex-col md:flex-row gap-6 md:h-full md:overflow-hidden">
 
       {/* ── Left column: text fields ── */}
-      <div className="flex-1 flex flex-col gap-8 overflow-y-auto min-h-0 pr-2">
+      <div className="flex-1 flex flex-col gap-8 md:overflow-y-auto md:min-h-0 pr-2">
 
         <EditableField
           label="Brief"
@@ -275,9 +275,9 @@ export function OverviewPanel({ project, onOpenNotes }: OverviewPanelProps) {
       </div>
 
       {/* ── Right column: calendar + open notes ── */}
-      <div className="w-[28%] shrink-0 flex flex-col gap-3">
+      <div className="w-full md:w-[28%] shrink-0 flex flex-col gap-3 pb-20 md:pb-0">
 
-        <div className="flex-1 rounded-[28px] border border-border/50 bg-black/50 overflow-hidden">
+        <div className="h-72 md:flex-1 rounded-[28px] border border-border/50 bg-black/50 overflow-hidden">
           <ProjectCalendarPanel
             events={project.calendarEvents}
             onEventsChange={(events) => updateProject(project.id, { calendarEvents: events })}
@@ -286,7 +286,7 @@ export function OverviewPanel({ project, onOpenNotes }: OverviewPanelProps) {
 
         <button
           onClick={onOpenNotes}
-          className="shrink-0 h-11 px-5 w-full text-sm font-semibold rounded-full bg-transparent text-white/30 border border-white/10 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 flex items-center justify-center gap-2 transition duration-200 ease-in-out"
+          className="hidden md:flex shrink-0 h-11 px-5 w-full text-sm font-semibold rounded-full bg-transparent text-white/30 border border-white/10 hover:text-primary/75 hover:border-primary/75 hover:bg-primary/10 hover:-translate-y-px active:translate-y-0 items-center justify-center gap-2 transition duration-200 ease-in-out"
         >
           <NotebookPen className="h-3.5 w-3.5" />
           Open notes
