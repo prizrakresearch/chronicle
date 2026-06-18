@@ -284,13 +284,8 @@ export function DitherBackground({
   return (
     <canvas
       ref={canvasRef}
-      className="fixed left-0 right-0 bottom-0"
-      style={{
-        top: "calc(-1 * env(safe-area-inset-top, 0px))",
-        zIndex: elevated ? 9997 : -10,
-        backgroundColor: "black",
-        willChange: "transform",
-      }}
+      className="fixed inset-0 w-full h-full"
+      style={{ zIndex: elevated ? 9997 : -10, backgroundColor: "black", willChange: "transform" }}
     />
   );
 }

@@ -345,8 +345,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   return (
     <div className="h-full flex flex-col">
 
+      {/* ── Safe-area strip (fills notch / Dynamic Island on mobile) ── */}
+      <div className="md:hidden shrink-0 bg-[#09090b]" style={{ height: "env(safe-area-inset-top, 0px)" }} />
+
       {/* ── Topbar ── */}
-      <div className="shrink-0 pb-5 px-4 md:py-5 md:px-6 flex items-center z-20 relative" style={{ paddingTop: "max(1.25rem, env(safe-area-inset-top))" }}>
+      <div className="shrink-0 pt-5 pb-5 px-4 md:py-5 md:px-6 flex items-center z-20 relative">
 
         {/* Left: Back button + project identity */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
