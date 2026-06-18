@@ -59,12 +59,8 @@ export function ClientBackground() {
        * animated background down so the UI stays legible at all times.
        */}
       <div
-        className="fixed left-0 right-0 bottom-0 bg-black pointer-events-none"
-        style={{
-          top: "calc(-1 * env(safe-area-inset-top, 0px))",
-          opacity: 0.80,
-          zIndex: -5,
-        }}
+        className="fixed inset-0 bg-black pointer-events-none"
+        style={{ opacity: 0.80, zIndex: -5 }}
       />
 
       {/* 80 % black overlay that sits between the elevated dither canvas
