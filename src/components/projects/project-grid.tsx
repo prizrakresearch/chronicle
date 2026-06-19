@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   Plus, Search, FolderOpen, LayoutGrid, Zap, PauseCircle, Archive,
-  EyeOff, Lock, Unlock, GitBranch, Filter, X,
+  EyeOff, Lock, Unlock, GitBranch, Filter, X, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +27,7 @@ const STATUS_FILTERS: { label: string; value: ProjectStatus | "all"; icon: React
 ];
 
 export function ProjectGrid() {
-  const { projects, loading, pin, setPin, isReadOnly } = useProjects();
+  const { projects, loading, pin, setPin, isReadOnly, deleteProject } = useProjects();
   const [search,        setSearch]        = useState("");
   const [statusFilter,  setStatusFilter]  = useState<ProjectStatus | "all">("all");
   const [createOpen,    setCreateOpen]    = useState(false);
@@ -40,6 +40,30 @@ export function ProjectGrid() {
 
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [rightTab,       setRightTab]       = useState<"calendar" | "notes">("calendar");
+
+  // ── Batch select (mobile only) ───────────────────────────────────────────────
+  const [selectMode,        setSelectMode]        = useState(false);
+  const [selected,          setSelected]          = useState<Set<string>>(new Set());
+  const [batchDeleteConfirm, setBatchDeleteConfirm] = useState(false);
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelected(new Set());
+  }
+
+  function handleBatchDelete() {
+    selected.forEach((id) => deleteProject(id));
+    setBatchDeleteConfirm(false);
+    exitSelectMode();
+  }
 
   const scrollRef          = useRef<HTMLDivElement>(null);
   const contentRef         = useRef<HTMLDivElement>(null);
@@ -152,7 +176,7 @@ export function ProjectGrid() {
 
   // ── Shared project list JSX ──────────────────────────────────────────────────
 
-  function ProjectList({ padX = "px-6" }: { padX?: string }) {
+  function ProjectList({ padX = "px-6", selectable = false }: { padX?: string; selectable?: boolean }) {
     return (
       <>
         {loading ? (
@@ -183,7 +207,12 @@ export function ProjectGrid() {
         ) : (
           <div className="flex flex-col gap-1">
             {visible.map((project) => (
-              <ProjectRow key={project.id} project={project} />
+              <ProjectRow
+                key={project.id}
+                project={project}
+                selected={selectable ? selected.has(project.id) : undefined}
+                onToggleSelect={selectable ? () => toggleSelect(project.id) : undefined}
+              />
             ))}
 
             {visible.length === 0 && hiddenProjects.length > 0 && (
@@ -334,21 +363,45 @@ export function ProjectGrid() {
             <span className="text-sm font-semibold text-white/80">Chronicle</span>
           </div>
 
-          {/* Row 2: Dashboard title + Plus button */}
+          {/* Row 2: Dashboard title + action buttons */}
           <div className="flex items-end justify-between px-4 pt-4 pb-4">
-            <div>
-              <h2 className="text-2xl font-bold text-white/90 tracking-tight">Dashboard</h2>
-              <p className="mt-0.5 text-sm text-white/40">{dateStr}</p>
-            </div>
-            {!isReadOnly && (
-              <div className="pb-1">
+            {selectMode ? (
+              <div className="flex-1 flex items-center justify-between">
+                <span className="text-base font-semibold text-white/70">
+                  {selected.size === 0 ? "Select projects" : `${selected.size} selected`}
+                </span>
                 <button
-                  onClick={() => setMobileMenuOpen(true)}
-                  className="w-10 h-10 rounded-full border border-primary/75 text-primary/75 flex items-center justify-center hover:bg-primary/10 active:scale-95 transition duration-150"
+                  onClick={exitSelectMode}
+                  className="h-9 px-4 rounded-full border border-white/15 text-sm text-white/50 hover:text-white/80 transition duration-150"
                 >
-                  <Plus className="h-4 w-4" />
+                  Cancel
                 </button>
               </div>
+            ) : (
+              <>
+                <div>
+                  <h2 className="text-2xl font-bold text-white/90 tracking-tight">Dashboard</h2>
+                  <p className="mt-0.5 text-sm text-white/40">{dateStr}</p>
+                </div>
+                <div className="pb-1 flex items-center gap-2">
+                  {!isReadOnly && (
+                    <button
+                      onClick={() => setSelectMode(true)}
+                      className="h-9 px-3.5 rounded-full border border-white/15 text-xs text-white/40 hover:text-white/70 hover:border-white/25 transition duration-150"
+                    >
+                      Select
+                    </button>
+                  )}
+                  {!isReadOnly && (
+                    <button
+                      onClick={() => setMobileMenuOpen(true)}
+                      className="w-10 h-10 rounded-full border border-primary/75 text-primary/75 flex items-center justify-center hover:bg-primary/10 active:scale-95 transition duration-150"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -387,7 +440,7 @@ export function ProjectGrid() {
 
           {/* Project rows */}
           <div className="px-4 pt-2 pb-14">
-            <ProjectList />
+            <ProjectList selectable={selectMode} />
           </div>
 
           {/* Flex spacer: fills gap when few rows, collapses to 0 when many */}
@@ -627,6 +680,54 @@ export function ProjectGrid() {
         </div>
 
       </div>
+
+      {/* ── Batch delete action bar (mobile only, floats above content) ── */}
+      {selectMode && selected.size > 0 && (
+        <div className="md:hidden fixed bottom-20 left-4 right-4 z-30 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <button
+            onClick={() => setBatchDeleteConfirm(true)}
+            className="w-full h-13 flex items-center justify-center gap-2.5 rounded-full bg-red-500/15 border border-red-500/30 text-red-400 text-sm font-semibold active:scale-[0.98] transition duration-150"
+            style={{ height: "3.25rem" }}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete {selected.size} project{selected.size !== 1 ? "s" : ""}
+          </button>
+        </div>
+      )}
+
+      {/* ── Batch delete confirm modal (mobile only) ── */}
+      {batchDeleteConfirm && (
+        <div
+          className="md:hidden fixed inset-0 z-50 flex items-center justify-center px-5"
+          style={{ backdropFilter: "blur(2px)", background: "rgba(0,0,0,0.5)" }}
+          onClick={() => setBatchDeleteConfirm(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-[28px] border border-white/[0.08] p-5 shadow-2xl"
+            style={{ background: "rgba(9,9,11,0.97)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-base font-semibold text-white/90 mb-1">
+              Delete {selected.size} project{selected.size !== 1 ? "s" : ""}?
+            </p>
+            <p className="text-sm text-white/40 mb-5">This cannot be undone.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setBatchDeleteConfirm(false)}
+                className="flex-1 h-11 rounded-full border border-white/15 text-sm text-white/50 hover:text-white/80 transition duration-150"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBatchDelete}
+                className="flex-1 h-11 rounded-full bg-red-500/15 border border-red-500/30 text-sm font-semibold text-red-400 hover:bg-red-500/25 transition duration-150"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dialogs (portal-rendered, position in tree doesn't matter) */}
       <CreateProjectDialog open={createOpen} onOpenChange={setCreateOpen} />

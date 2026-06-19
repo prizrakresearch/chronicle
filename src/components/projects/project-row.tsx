@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import React from "react";
 import {
   MoreHorizontal, GitBranch, Clock, Trash2, Archive, RotateCcw,
-  CircleDot, Pin, PinOff, EyeOff, Share2,
+  CircleDot, Pin, PinOff, EyeOff, Share2, Check,
   Rocket, Globe, Terminal, Database, Layers, Cpu,
   Compass, Flame, Code2, Boxes, Radio, Wand2, Satellite, FlaskConical, Binary,
 } from "lucide-react";
@@ -37,7 +37,9 @@ function getProjectIcon(name: string) {
 
 interface ProjectRowProps {
   project: Project;
-  dimmed?: boolean; // used when shown in hidden-projects section
+  dimmed?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }
 
 function ProjectAvatar({ name, logoUrl }: { name: string; logoUrl: string | null }) {
@@ -52,7 +54,7 @@ function ProjectAvatar({ name, logoUrl }: { name: string; logoUrl: string | null
   );
 }
 
-export function ProjectRow({ project, dimmed = false }: ProjectRowProps) {
+export function ProjectRow({ project, dimmed = false, selected, onToggleSelect }: ProjectRowProps) {
   const { updateProject, deleteProject, pin, setPin, isReadOnly } = useProjects();
   const router = useRouter();
   const [pinSetupOpen,    setPinSetupOpen]    = useState(false);
@@ -81,11 +83,24 @@ export function ProjectRow({ project, dimmed = false }: ProjectRowProps) {
       {/* ── Mobile card layout ─────────────────────────────────────────────── */}
       <div
         className={cn(
-          "md:hidden group flex items-center gap-3 p-3 rounded-2xl border border-border/50 bg-black/5 hover:bg-white/[0.04] hover:border-border/80 transition-colors duration-200 ease-out cursor-pointer",
-          dimmed && "opacity-50 hover:opacity-80"
+          "md:hidden group flex items-center gap-3 p-3 rounded-2xl border transition-colors duration-200 ease-out cursor-pointer",
+          onToggleSelect
+            ? selected
+              ? "border-primary/40 bg-primary/10"
+              : "border-border/50 bg-black/5 active:bg-white/[0.04]"
+            : "border-border/50 bg-black/5 hover:bg-white/[0.04] hover:border-border/80",
+          dimmed && "opacity-50"
         )}
-        onClick={() => router.push(`/projects/${project.id}`)}
+        onClick={() => onToggleSelect ? onToggleSelect() : router.push(`/projects/${project.id}`)}
       >
+        {onToggleSelect !== undefined ? (
+          <div className={cn(
+            "w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-150",
+            selected ? "bg-primary border-primary" : "border-white/25"
+          )}>
+            {selected && <Check className="h-3 w-3 text-black" />}
+          </div>
+        ) : null}
         <ProjectAvatar name={project.name} logoUrl={project.logoUrl} />
 
         <div className="flex-1 min-w-0 flex flex-col gap-1.5">
